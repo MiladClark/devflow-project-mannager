@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0b1120;
+  --color-panel: #101a2e;
+  --color-panel2: #0e1627;
+  --color-edge: #1d2a44;
+  --color-accent: #22d3ee;
+  /* text color used on top of bg-accent buttons */
+  --color-accent-fg: #020617;
+}
+
+/* ---------- Themes ----------
+   data-theme picks the palette, data-mode picks dark/light.
+   Tailwind v4 utilities read these CSS variables, so overriding them
+   here re-skins every existing class in the app. */
+
+/* light mode: invert the slate text/surface scale (950 stays dark —
+   it is used as text on accent buttons in both modes) */
+html[data-mode="light"] {
+  --color-white: #0f172a;
+  --color-slate-200: #1e293b;
+  --color-slate-300: #334155;
+  --color-slate-400: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-600: #94a3b8;
+  --color-slate-700: #cbd5e1;
+  --color-slate-800: #e2e8f0;
+  --color-slate-900: #f1f5f9;
+  /* light-mode accents are dark, so button text flips to white */
+  --color-accent-fg: #ffffff;
+  /* darken status/label tints that are too washed out on light surfaces */
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #d97706;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-rose-400: #e11d48;
+  --color-sky-400: #0284c7;
+  --color-cyan-400: #0e7490;
+}
+
+/* ocean (default) */
+html[data-theme="ocean"][data-mode="light"] {
+  --color-bg: #eef3f8;
+  --color-panel: #ffffff;
+  --color-panel2: #e4ecf4;
+  --color-edge: #c8d5e3;
+  --color-accent: #0891b2;
+  --color-cyan-300: #06b6d4;
+}
+
+/* violet */
+html[data-theme="violet"] {
+  --color-bg: #100b20;
+  --color-panel: #17102e;
+  --color-panel2: #130e27;
+  --color-edge: #2b1d4a;
+  --color-accent: #a78bfa;
+  --color-cyan-300: #c4b5fd;
+}
+html[data-theme="violet"][data-mode="light"] {
+  --color-bg: #f3f0fa;
+  --color-panel: #ffffff;
+  --color-panel2: #eae4f6;
+  --color-edge: #d4c9e8;
+  --color-accent: #7c3aed;
+  --color-cyan-300: #8b5cf6;
+}
+
+/* emerald */
+html[data-theme="emerald"] {
+  --color-bg: #0a1712;
+  --color-panel: #0f231a;
+  --color-panel2: #0d1d16;
+  --color-edge: #1d3a2c;
+  --color-accent: #34d399;
+  --color-cyan-300: #6ee7b9;
+}
+html[data-theme="emerald"][data-mode="light"] {
+  --color-bg: #eef6f1;
+  --color-panel: #ffffff;
+  --color-panel2: #e2efe8;
+  --color-edge: #c5dcce;
+  --color-accent: #059669;
+  --color-cyan-300: #10b981;
+}
+
+/* sunset */
+html[data-theme="sunset"] {
+  --color-bg: #171007;
+  --color-panel: #231a10;
+  --color-panel2: #1d150d;
+  --color-edge: #3c2c1a;
+  --color-accent: #fb923c;
+  --color-cyan-300: #fdba74;
+}
+html[data-theme="sunset"][data-mode="light"] {
+  --color-bg: #faf4ec;
+  --color-panel: #ffffff;
+  --color-panel2: #f4eadb;
+  --color-edge: #e3d2b8;
+  --color-accent: #ea580c;
+  --color-cyan-300: #f97316;
+}
+
+/* rose */
+html[data-theme="rose"] {
+  --color-bg: #170b10;
+  --color-panel: #231018;
+  --color-panel2: #1d0d13;
+  --color-edge: #3c1a2a;
+  --color-accent: #fb7185;
+  --color-cyan-300: #fda4af;
+}
+html[data-theme="rose"][data-mode="light"] {
+  --color-bg: #faf0f3;
+  --color-panel: #ffffff;
+  --color-panel2: #f4e2e8;
+  --color-edge: #e3c3cd;
+  --color-accent: #e11d48;
+  --color-cyan-300: #f43f5e;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-slate-200 antialiased;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  overscroll-behavior: none;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-edge);
+  border-radius: 6px;
+  border: 2px solid var(--color-bg);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.log-font {
+  font-family: "Cascadia Mono", Consolas, monospace;
+}

@@ -1,0 +1,13 @@
+appId: com.devflow.manager
+productName: DevFlow Manager
+directories:
+  output: release
+files:
+  - dist/**
+  - dist-electron/**
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

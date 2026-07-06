@@ -17,11 +17,11 @@ files:
 asarUnpack:
   - "**/node_modules/node-pty/**"
 extraResources:
-  # brand PNG used at runtime for the system-tray icon
-  - from: build/icon.png
-    to: icon.png
+  # brand icon used at runtime for window + system-tray (Windows .ico)
+  - from: build/icon.ico
+    to: icon.ico
 win:
-  icon: build/icon.png
+  icon: build/icon.ico
   signAndEditExecutable: false
   target:
     - dir

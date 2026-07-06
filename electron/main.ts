@@ -44,8 +44,8 @@ const startHidden = process.argv.includes('--hidden')
 // packaged exe icon isn't used). Packaged builds embed the icon via electron-builder.
 function brandIconPath(): string | null {
   const candidates = [
-    path.join(app.getAppPath(), 'build', 'icon.png'), // dev
-    path.join(process.resourcesPath ?? '', 'icon.png'), // packaged (extraResources)
+    path.join(app.getAppPath(), 'build', 'icon.ico'), // dev
+    path.join(process.resourcesPath ?? '', 'icon.ico'), // packaged (extraResources)
   ]
   return candidates.find((p) => fs.existsSync(p)) ?? null
 }

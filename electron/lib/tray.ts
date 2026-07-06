@@ -10,8 +10,8 @@ let getWin: () => BrowserWindow | null = () => null
 /** Path to the pre-rendered brand PNG used for the tray icon. */
 function trayIconPath(): string | null {
   const candidates = [
-    path.join(app.getAppPath(), 'build', 'icon.png'), // dev
-    path.join(process.resourcesPath ?? '', 'icon.png'), // packaged (extraResources)
+    path.join(app.getAppPath(), 'build', 'icon.ico'), // dev
+    path.join(process.resourcesPath ?? '', 'icon.ico'), // packaged (extraResources)
   ]
   return candidates.find((p) => fs.existsSync(p)) ?? null
 }

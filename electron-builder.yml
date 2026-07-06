@@ -1,9 +1,12 @@
 appId: com.devflow.manager
 productName: DevFlow Manager
+icon: build/icon.ico
 directories:
   output: release
   buildResources: build
 compression: maximum
+electronLanguages:
+  - en-US
 # node-pty ships ABI-stable N-API prebuilt binaries that work in Electron as-is,
 # so we must NOT let electron-builder recompile them (its rebuild of the bundled
 # winpty fails on GetCommitHash.bat). Shipping the prebuild is correct and works.
@@ -11,9 +14,15 @@ npmRebuild: false
 files:
   - dist/**
   - dist-electron/**
+  - package.json
+  - "!node_modules/**"
   # node-pty is required at runtime by the integrated terminal (loaded from
   # node_modules because it is a native module, excluded from the vite bundle)
   - node_modules/node-pty/**
+  - "!node_modules/node-pty/prebuilds/darwin-*"
+  - "!node_modules/node-pty/prebuilds/win32-arm64"
+  - "!node_modules/node-pty/deps/**"
+  - "!node_modules/node-pty/src/**"
 asarUnpack:
   - "**/node_modules/node-pty/**"
 extraResources:

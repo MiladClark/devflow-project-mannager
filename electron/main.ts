@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, nativeImage } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { registerProjectHandlers } from './ipc/projects'
@@ -24,11 +24,25 @@ import { applyLoginItemSettings, autoStartProjects } from './lib/autostart'
 import { createTray, refreshTrayMenu, destroyTray } from './lib/tray'
 import { startNotifications, stopNotifications } from './lib/notify'
 import { checkForUpdates } from './lib/updates'
+import { isQuittingForUpdate } from './lib/updater'
 import { getLicenseState } from './lib/licensing'
 import { store } from './lib/store'
 
 let win: BrowserWindow | null = null
 let quitting = false
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+    }
+  })
+}
 
 // required for Windows toast notifications in packaged builds
 app.setAppUserModelId('com.devflow.manager')
@@ -76,6 +90,11 @@ function createWindow() {
   attachWindowStateEvents(win)
   attachLicenseFocusHandler(win)
 
+  if (icon) {
+    const image = nativeImage.createFromPath(icon)
+    if (!image.isEmpty()) win.setIcon(image)
+  }
+
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL)
   } else {
@@ -83,6 +102,7 @@ function createWindow() {
   }
 
   win.on('close', (e) => {
+    if (isQuittingForUpdate()) return
     // hide to tray instead of closing when enabled (real quit sets `quitting`)
     if (store.getSettings().closeToTray && !quitting) {
       e.preventDefault()
@@ -96,6 +116,7 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return
   registerProjectHandlers()
   registerRunnerHandlers()
   registerScaffoldHandlers()
@@ -148,6 +169,7 @@ app.on('window-all-closed', async () => {
 
 app.on('before-quit', () => {
   quitting = true
+  if (isQuittingForUpdate()) return
   disposeAllTerminals()
   stopProxy()
   void stopAll()

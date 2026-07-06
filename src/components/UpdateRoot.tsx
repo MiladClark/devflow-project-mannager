@@ -15,7 +15,23 @@ export function UpdateRoot() {
   const beginUpdate = useCallback(async (version?: string) => {
     setUpdating(true)
     setProgress({ phase: 'downloading', percent: 0, message: 'Starting download…', version })
-    await api.startUpdate(version)
+    const res = await api.startUpdate(version)
+    if (!res.ok) {
+      setProgress((p) => ({
+        phase: 'error',
+        percent: 0,
+        message: 'Update failed',
+        error: res.error ?? 'Update failed',
+        version: p.version ?? version,
+      }))
+      setUpdating(true)
+    }
+  }, [])
+
+  const cancelUpdate = useCallback(async () => {
+    await api.cancelUpdate?.()
+    setUpdating(false)
+    setProgress(IDLE)
   }, [])
 
   useEffect(() => {
@@ -28,10 +44,17 @@ export function UpdateRoot() {
     const offProgress = api.onUpdateProgress((p) => {
       const prog = p as UpdateProgress
       setProgress(prog)
-      if (prog.phase === 'downloading' || prog.phase === 'verifying' || prog.phase === 'applying' || prog.phase === 'restarting') {
+      if (
+        prog.phase === 'downloading' ||
+        prog.phase === 'verifying' ||
+        prog.phase === 'applying' ||
+        prog.phase === 'restarting'
+      ) {
         setUpdating(true)
       }
-      if (prog.phase === 'error') setUpdating(false)
+      if (prog.phase === 'error' || prog.phase === 'cancelled') {
+        setUpdating(prog.phase === 'error')
+      }
     })
     void api.fetchPendingUpdate()
     return () => {
@@ -41,6 +64,7 @@ export function UpdateRoot() {
   }, [beginUpdate])
 
   const showBanner = available && !bannerDismissed && !updating && !available.required
+  const canCancel = progress.phase === 'downloading' || progress.phase === 'verifying'
 
   return (
     <>
@@ -52,7 +76,18 @@ export function UpdateRoot() {
           onDismiss={() => setBannerDismissed(true)}
         />
       )}
-      {updating && <UpdateModal progress={progress} required={available?.required} />}
+      {updating && (
+        <UpdateModal
+          progress={progress}
+          required={available?.required}
+          canCancel={canCancel}
+          onCancel={() => void cancelUpdate()}
+          onDismiss={() => {
+            setUpdating(false)
+            setProgress(IDLE)
+          }}
+        />
+      )}
     </>
   )
 }

@@ -468,7 +468,7 @@ export interface LicenseState {
 }
 
 export interface UpdateProgress {
-  phase: 'idle' | 'downloading' | 'verifying' | 'applying' | 'restarting' | 'error'
+  phase: 'idle' | 'downloading' | 'verifying' | 'applying' | 'restarting' | 'error' | 'cancelled'
   percent: number
   message: string
   version?: string

@@ -1,7 +1,9 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import {
+  cancelUpdate,
   fetchLatestUpdate,
   getPendingUpdate,
+  resetUpdateState,
   setUpdateProgressHandler,
   startUpdate,
   type UpdateProgress,
@@ -37,6 +39,12 @@ export function registerUpdateHandlers() {
   ipcMain.handle('updates:pending', () => getPendingUpdate())
 
   ipcMain.handle('updates:start', (_e, version?: string) => startUpdate(version))
+
+  ipcMain.handle('updates:cancel', () => {
+    const res = cancelUpdate()
+    if (res.ok) resetUpdateState()
+    return res
+  })
 }
 
 export function notifyUpdateAvailable(payload: {

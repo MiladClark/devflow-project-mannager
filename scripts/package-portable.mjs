@@ -1,7 +1,7 @@
 /**
  * Build portable app dir and copy to devflow/ (same layout as post-install).
  */
-import { cpSync, existsSync, rmSync, mkdirSync } from "node:fs";
+import { cpSync, existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -10,14 +10,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const staging = path.join(root, "release", "win-unpacked");
 const out = path.join(root, "devflow");
 
-const iconSrc = path.join(root, "roadmap-and-design", "icon.ico");
-const buildDir = path.join(root, "build");
-if (!existsSync(iconSrc)) {
-  console.error("Missing app icon:", iconSrc);
-  process.exit(1);
-}
-mkdirSync(buildDir, { recursive: true });
-cpSync(iconSrc, path.join(buildDir, "icon.ico"));
+const iconBuild = spawnSync("node", ["scripts/build-icon.mjs"], {
+  cwd: root,
+  stdio: "inherit",
+  shell: false,
+});
+if (iconBuild.status !== 0) process.exit(iconBuild.status ?? 1);
 
 process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
 

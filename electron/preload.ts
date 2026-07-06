@@ -126,6 +126,7 @@ const api = {
   fetchPendingUpdate: () => ipcRenderer.invoke('updates:fetch'),
   getPendingUpdate: () => ipcRenderer.invoke('updates:pending'),
   startUpdate: (version?: string) => ipcRenderer.invoke('updates:start', version),
+  cancelUpdate: () => ipcRenderer.invoke('updates:cancel'),
   onUpdateAvailable: (cb: (...args: unknown[]) => void) => on('updates:available', cb),
   onUpdateProgress: (cb: (...args: unknown[]) => void) => on('updates:progress', cb),
   onLicenseChanged: (cb: (...args: unknown[]) => void) => on('license:changed', cb),

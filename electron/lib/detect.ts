@@ -2,12 +2,16 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { Framework, Project } from '../../src/shared/types'
 import { newId } from './store'
+import { resolvePackageManager, pmRun } from './pkgmanager'
+import { parseEnginesNode } from './nodeVersion'
+import { sanitizeSlug } from './proxy'
 
 interface PackageJson {
   name?: string
   scripts?: Record<string, string>
   dependencies?: Record<string, string>
   devDependencies?: Record<string, string>
+  engines?: { node?: string }
 }
 
 export function detectProject(dir: string): Project | { error: string } {
@@ -43,6 +47,13 @@ export function detectProject(dir: string): Project | { error: string } {
     frameworks.push('Next.js')
     defaultPort = 3000
     outputDir = '.next'
+  } else if (deps['electron']) {
+    framework = 'electron'
+    frameworks.push('Electron')
+    defaultPort = 5173
+    outputDir = 'out'
+    if (deps['react']) frameworks.push('React')
+    if (deps['vite']) frameworks.push('Vite')
   } else if (deps['vite']) {
     framework = 'vite'
     frameworks.push('Vite')
@@ -73,15 +84,17 @@ export function detectProject(dir: string): Project | { error: string } {
   if (framework === 'unknown' && frameworks.length === 0) frameworks.push('Unknown')
 
   const scripts = pkg.scripts ?? {}
+  const pm = resolvePackageManager(dir)
   // Strapi uses `develop` as its dev script
   const runCommand = scripts.dev
-    ? 'npm run dev'
+    ? pmRun(pm, 'dev')
     : scripts.develop
-      ? 'npm run develop'
+      ? pmRun(pm, 'develop')
       : scripts.start
-        ? 'npm start'
+        ? pmRun(pm, 'start')
         : ''
-  const buildCommand = scripts.build ? 'npm run build' : ''
+  const buildCommand = scripts.build ? pmRun(pm, 'build') : ''
+  const nodeVersion = parseEnginesNode(dir)
 
   return {
     id: newId(),
@@ -93,6 +106,9 @@ export function detectProject(dir: string): Project | { error: string } {
     buildCommand,
     outputDir,
     defaultPort,
+    packageManager: pm,
+    nodeVersion,
+    localSlug: sanitizeSlug(pkg.name || path.basename(dir)),
     env: {},
     createdAt: Date.now(),
   }

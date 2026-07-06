@@ -1,5 +1,6 @@
 import { ipcMain, shell, dialog, BrowserWindow } from 'electron'
 import { getSystemStats, getProcessTreeStats } from '../lib/stats'
+import { getDevProcesses, killDevProcess } from '../lib/devProcesses'
 import { getRunningDevPids } from './runner'
 import type { ProjectStats } from '../../src/shared/types'
 
@@ -53,4 +54,6 @@ export function registerSystemHandlers() {
     })
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
   })
+  ipcMain.handle('system:devProcesses', () => getDevProcesses())
+  ipcMain.handle('system:killProcess', (_e, pid: number) => killDevProcess(pid))
 }

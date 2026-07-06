@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { APP_VERSION } from '../version'
-import logoUrl from '../assets/logo.svg'
+import logoBlue from '../assets/logo-blue.svg'
 
 const MIN_SHOW_MS = 1600
 
@@ -44,7 +44,7 @@ export function Splash({ ready }: { ready: boolean }) {
         fading ? 'pointer-events-none opacity-0' : 'opacity-100'
       }`}
     >
-      <img src={logoUrl} alt="DevFlow" className="h-28 w-28 drop-shadow-[0_0_40px_rgba(34,211,238,0.25)]" />
+      <img src={logoBlue} alt="DevFlow" className="h-28 w-28 drop-shadow-[0_0_40px_rgba(0,127,255,0.35)]" />
       <div>
         <h1 className="text-center text-xl font-bold text-white">
           DevFlow <span className="font-normal text-slate-400">Manager</span>

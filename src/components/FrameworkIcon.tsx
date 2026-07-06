@@ -7,6 +7,7 @@ const config: Record<Framework, { label: string; bg: string; fg: string }> = {
   vue: { label: 'V', bg: 'bg-emerald-900', fg: 'text-emerald-300' },
   tailwind: { label: 'T', bg: 'bg-sky-900', fg: 'text-sky-300' },
   node: { label: 'N', bg: 'bg-lime-900', fg: 'text-lime-300' },
+  electron: { label: 'e', bg: 'bg-[#47848f]/30', fg: 'text-[#9feaf9]' },
   unknown: { label: '?', bg: 'bg-slate-700', fg: 'text-slate-300' },
 }
 

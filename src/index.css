@@ -122,6 +122,24 @@ html[data-theme="rose"][data-mode="light"] {
   --color-cyan-300: #f43f5e;
 }
 
+/* granite — black stone / silver accent */
+html[data-theme="granite"] {
+  --color-bg: #0c0c0e;
+  --color-panel: #141417;
+  --color-panel2: #101012;
+  --color-edge: #2a2a2e;
+  --color-accent: #c4c4cc;
+  --color-cyan-300: #d4d4d8;
+}
+html[data-theme="granite"][data-mode="light"] {
+  --color-bg: #e8e8ea;
+  --color-panel: #f4f4f5;
+  --color-panel2: #e4e4e7;
+  --color-edge: #d4d4d8;
+  --color-accent: #52525b;
+  --color-cyan-300: #71717a;
+}
+
 html,
 body,
 #root {
@@ -132,6 +150,32 @@ body {
   @apply bg-bg text-slate-200 antialiased;
   font-family: "Segoe UI", system-ui, sans-serif;
   overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Copy-friendly surfaces — opt in with .select-text where needed */
+input,
+textarea,
+select,
+pre,
+.select-text,
+.log-font,
+.xterm,
+.xterm * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Electron frameless window — drag region for custom title bar */
+.app-drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 ::-webkit-scrollbar {
@@ -149,4 +193,152 @@ body {
 
 .log-font {
   font-family: "Cascadia Mono", Consolas, monospace;
+}
+
+/* ---------- Animations ---------- */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes content-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes skeleton-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-pop-in {
+  animation: pop-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top center;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center;
+}
+
+.animate-content-in {
+  animation: content-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-page-in {
+  animation: page-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* skeleton / ghost loading blocks */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--color-edge) 55%, var(--color-panel));
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-white, #fff) 8%, transparent) 50%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+/* staggered entrance for lists/grids */
+.stagger > * {
+  animation: fade-up 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 40ms; }
+.stagger > *:nth-child(3) { animation-delay: 80ms; }
+.stagger > *:nth-child(4) { animation-delay: 120ms; }
+.stagger > *:nth-child(5) { animation-delay: 160ms; }
+.stagger > *:nth-child(6) { animation-delay: 200ms; }
+.stagger > *:nth-child(7) { animation-delay: 240ms; }
+.stagger > *:nth-child(8) { animation-delay: 280ms; }
+.stagger > *:nth-child(9) { animation-delay: 320ms; }
+.stagger > *:nth-child(10) { animation-delay: 360ms; }
+.stagger > *:nth-child(11) { animation-delay: 400ms; }
+.stagger > *:nth-child(12) { animation-delay: 440ms; }
+
+/* cards/rows lift a touch on hover */
+.lift {
+  transition:
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -12px color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+/* icon buttons get a gentle press feedback */
+.press {
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease, color 0.15s ease;
+}
+.press:active {
+  transform: scale(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.001ms !important;
+  }
+  .lift:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  .skeleton::after {
+    animation: none;
+  }
 }

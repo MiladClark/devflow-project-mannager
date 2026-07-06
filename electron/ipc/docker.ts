@@ -1,8 +1,23 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import type { CreateDbContainerOptions, DbContainer } from '../../src/shared/types'
 import { getDockerStatus, listDbContainers, listDatabases, createDatabase, containerAction } from '../lib/docker'
 import { store } from '../lib/store'
+
+const DOCKER_DESKTOP_PATHS = [
+  'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe',
+  'C:\\Program Files (x86)\\Docker\\Docker\\Docker Desktop.exe',
+]
+
+function launchDockerDesktop(): { ok: boolean; error?: string } {
+  const exe = DOCKER_DESKTOP_PATHS.find((p) => existsSync(p))
+  if (!exe) return { ok: false, error: 'Docker Desktop was not found in its usual install location.' }
+  // detach so Docker Desktop keeps running independently of DevFlow
+  const child = spawn(exe, [], { detached: true, stdio: 'ignore', windowsHide: false })
+  child.unref()
+  return { ok: true }
+}
 
 function broadcast(channel: string, ...args: unknown[]) {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, ...args)
@@ -75,4 +90,5 @@ export function registerDockerHandlers() {
   })
 
   ipcMain.handle('docker:createContainer', (_e, opts: CreateDbContainerOptions) => createContainer(opts))
+  ipcMain.handle('docker:launch', () => launchDockerDesktop())
 }

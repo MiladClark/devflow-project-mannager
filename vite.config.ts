@@ -10,7 +10,8 @@ export default defineConfig({
     electron({
       main: {
         entry: 'electron/main.ts',
-        vite: { build: { outDir: 'dist-electron' } },
+        // node-pty is a native module — must stay external to the bundle
+        vite: { build: { outDir: 'dist-electron', rollupOptions: { external: ['node-pty'] } } },
       },
       preload: {
         input: 'electron/preload.ts',

@@ -12,7 +12,7 @@ export function StatCard({
   accent?: string
 }) {
   return (
-    <div className="flex-1 rounded-xl border border-edge bg-panel p-4">
+    <div className="lift flex-1 rounded-xl border border-edge bg-panel p-4 hover:border-slate-600">
       <div className="flex items-center justify-between text-sm text-slate-400">
         {label}
         {icon}

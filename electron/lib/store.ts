@@ -2,22 +2,39 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import type { Project, ActivityEvent, AppSettings, DbConnection } from '../../src/shared/types'
+import type { Project, ActivityEvent, AppSettings, DbConnection, HealthSummary } from '../../src/shared/types'
+import { healProjects } from './pathHeal'
 
 interface StoreData {
   projects: Project[]
   activity: ActivityEvent[]
   connections: DbConnection[]
   settings: AppSettings
+  healthSummaries: Record<string, HealthSummary>
 }
 
 const defaults = (): StoreData => ({
   projects: [],
   activity: [],
   connections: [],
+  healthSummaries: {},
   settings: {
     reservedPorts: [3000, 3001],
     defaultProjectsDir: path.join(app.getPath('home'), 'dev'),
+    closeToTray: false,
+    notifyCrash: true,
+    notifyBuild: true,
+    notifyUpdates: true,
+    launchAtLogin: false,
+    startMinimized: false,
+    trayProjectCount: 5,
+    openOutputAfterBuild: false,
+    preferredEditor: 'vscode',
+    customEditorCmd: '',
+    preferredNodeManager: 'auto',
+    localDomainsEnabled: false,
+    localDomainSuffix: 'test',
+    proxyAutoStart: true,
   },
 })
 
@@ -31,7 +48,28 @@ function load(): StoreData {
   if (data) return data
   try {
     const raw = fs.readFileSync(filePath(), 'utf-8')
-    data = { ...defaults(), ...JSON.parse(raw) }
+    const parsed = JSON.parse(raw)
+    const base = defaults()
+    // deep-merge settings so newly introduced keys keep their defaults
+    const loaded: StoreData = { ...base, ...parsed, settings: { ...base.settings, ...(parsed.settings ?? {}) } }
+
+    const { projects, changed } = healProjects(loaded.projects)
+    if (changed.length > 0) {
+      loaded.projects = projects
+      for (const msg of changed) {
+        loaded.activity.unshift({
+          id: crypto.randomUUID(),
+          ts: Date.now(),
+          level: 'info',
+          title: 'Project Path Updated',
+          message: msg,
+        })
+      }
+      loaded.activity = loaded.activity.slice(0, 50)
+    }
+
+    data = loaded
+    if (changed.length > 0) save()
   } catch {
     data = defaults()
   }
@@ -91,6 +129,13 @@ export const store = {
   removeConnection(id: string) {
     const d = load()
     d.connections = d.connections.filter((c) => c.id !== id)
+    save()
+  },
+  getHealthSummaries(): Record<string, HealthSummary> {
+    return load().healthSummaries
+  },
+  setHealthSummary(projectId: string, summary: HealthSummary) {
+    load().healthSummaries[projectId] = summary
     save()
   },
   getSettings(): AppSettings {

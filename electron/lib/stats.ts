@@ -77,6 +77,34 @@ function collectTree(rootPid: number, byParent: Map<number, ProcInfo[]>, byPid: 
   return result
 }
 
+/**
+ * Maps each PID in `pids` to the root PID (from `rootPids`) whose process tree
+ * contains it, if any. Dev servers spawn via shell:true, so the listener PID is
+ * a descendant of the tracked PID — never the tracked PID itself.
+ */
+export async function findOwningRoots(pids: number[], rootPids: number[]): Promise<Map<number, number>> {
+  const out = new Map<number, number>()
+  if (pids.length === 0 || rootPids.length === 0) return out
+  const procs = await queryProcesses()
+  const byPid = new Map<number, ProcInfo>()
+  const byParent = new Map<number, ProcInfo[]>()
+  for (const p of procs) {
+    byPid.set(p.ProcessId, p)
+    const arr = byParent.get(p.ParentProcessId) ?? []
+    arr.push(p)
+    byParent.set(p.ParentProcessId, arr)
+  }
+  for (const rootPid of rootPids) {
+    const tree = collectTree(rootPid, byParent, byPid)
+    const members = new Set(tree.map((p) => p.ProcessId))
+    members.add(rootPid)
+    for (const pid of pids) {
+      if (!out.has(pid) && members.has(pid)) out.set(pid, rootPid)
+    }
+  }
+  return out
+}
+
 /** Returns per-root-pid stats: CPU % (of all cores) and memory bytes for the whole process tree. */
 export async function getProcessTreeStats(rootPids: number[]): Promise<Map<number, ProjectStats>> {
   const out = new Map<number, ProjectStats>()

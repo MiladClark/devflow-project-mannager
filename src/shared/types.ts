@@ -1,6 +1,14 @@
-export type Framework = 'next' | 'vite' | 'react' | 'vue' | 'tailwind' | 'node' | 'unknown'
+export type Framework = 'next' | 'vite' | 'react' | 'vue' | 'tailwind' | 'node' | 'electron' | 'unknown'
 
 export type ProjectStatus = 'stopped' | 'starting' | 'running' | 'building' | 'error'
+
+export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun'
+
+export type PreferredEditor = 'vscode' | 'cursor' | 'custom'
+
+export type NodeManager = 'system' | 'fnm' | 'nvm' | 'volta'
+
+export type PreferredNodeManager = 'auto' | 'fnm' | 'nvm' | 'volta' | 'system'
 
 export interface Project {
   id: string
@@ -15,6 +23,40 @@ export interface Project {
   defaultPort: number
   env: Record<string, string>
   createdAt: number
+  /** detected package manager (from lockfile / packageManager field) */
+  packageManager?: PackageManager
+  /** start the dev server automatically when DevFlow launches (Pro) */
+  autoStart?: boolean
+  /** npm scripts pinned in the Scripts tab */
+  pinnedScripts?: string[]
+  /** Node version from engines.node or manual override */
+  nodeVersion?: string
+  nodeManager?: NodeManager
+  /** docker-compose.yml path relative to project root */
+  composeFile?: string
+  composeProfile?: string
+  /** start compose stack before dev server */
+  composeAutoStart?: boolean
+  /** local HTTPS slug — defaults from project name */
+  localSlug?: string
+}
+
+/** A blocker found before running a build/dev command, with a suggested fix. */
+export interface BuildIssue {
+  kind: 'no-build-script' | 'deps-missing' | 'pm-missing' | 'node-missing' | 'path-missing'
+  message: string
+  packageManager?: PackageManager
+  /** the deps can be installed in-app by running `<pm> install` */
+  canInstallDeps?: boolean
+  /** App and Tools id the user should install (e.g. 'node', 'pnpm', 'bun') */
+  toolId?: string
+}
+
+export interface RunActionResult {
+  ok: boolean
+  error?: string
+  portConflict?: PortOwner
+  issue?: BuildIssue
 }
 
 export interface RuntimeInfo {
@@ -48,6 +90,36 @@ export interface SystemStats {
   uptime: number
 }
 
+export type DevProcessCategory =
+  | 'runtime'
+  | 'package-manager'
+  | 'editor'
+  | 'database'
+  | 'container'
+  | 'devflow'
+  | 'shell'
+  | 'other-dev'
+
+export interface DevProcess {
+  pid: number
+  parentPid: number
+  name: string
+  commandLine: string
+  category: DevProcessCategory
+  cpu: number
+  mem: number
+  managedProjectId?: string
+  managedProjectName?: string
+  killable: boolean
+  reason?: string
+}
+
+export interface DevProcessSnapshot {
+  processes: DevProcess[]
+  totals: { cpu: number; mem: number; count: number }
+  sampledAt: number
+}
+
 export interface ProjectStats {
   cpu: number
   mem: number
@@ -63,15 +135,225 @@ export interface PortCheck {
 export interface AppSettings {
   reservedPorts: number[]
   defaultProjectsDir: string
+  closeToTray: boolean
+  notifyCrash: boolean
+  notifyBuild: boolean
+  notifyUpdates: boolean
+  launchAtLogin: boolean
+  startMinimized: boolean
+  trayProjectCount: number
+  openOutputAfterBuild: boolean
+  preferredEditor: PreferredEditor
+  customEditorCmd?: string
+  preferredNodeManager: PreferredNodeManager
+  localDomainsEnabled: boolean
+  localDomainSuffix: string
+  proxyAutoStart: boolean
+}
+
+export interface ProjectScript {
+  name: string
+  command: string
+  hidden?: boolean
+}
+
+export interface ScanCandidate {
+  project: Project
+  alreadyImported: boolean
+}
+
+export interface ScanProjectsResult {
+  ok: boolean
+  error?: string
+  cancelled?: boolean
+  candidates: ScanCandidate[]
+  skipped: string[]
+}
+
+export interface BulkFailure {
+  id: string
+  error: string
+  portConflict?: PortOwner
+}
+
+export interface BulkResult {
+  ok: number
+  failed: BulkFailure[]
+}
+
+export interface EditorStatus {
+  vscode: boolean
+  cursor: boolean
+}
+
+export interface ComposeService {
+  name: string
+  state: string
+  ports: string
+}
+
+export interface ComposeStatus {
+  ok: boolean
+  running: boolean
+  file?: string
+  services: ComposeService[]
+  error?: string
+}
+
+export interface ProxySetupStatus {
+  mkcertInstalled: boolean
+  mkcertTrusted: boolean
+  caddyInstalled: boolean
+  caddyRunning: boolean
+  hostsConfigured: boolean
+  ready: boolean
+  httpsPort: number
+  error?: string
+}
+
+export interface PortOwner {
+  port: number
+  pid: number
+  processName: string
+  /** set when the listener belongs to a DevFlow-managed project */
+  managedProjectId?: string
+  managedProjectName?: string
+  killable: boolean
+  reason?: string
+}
+
+export interface StartResult {
+  ok: boolean
+  error?: string
+  portConflict?: PortOwner
+  issue?: BuildIssue
+}
+
+export interface BackupImportResult {
+  ok: boolean
+  error?: string
+  projectsAdded: number
+  projectsSkipped: number
+  connectionsAdded: number
+  warnings: string[]
+}
+
+// ---- env files ----
+
+export interface EnvFileInfo {
+  name: string
+  size: number
+  mtime: number
+}
+
+export interface EnvLine {
+  type: 'pair' | 'comment' | 'blank' | 'raw'
+  key?: string
+  value?: string
+  raw: string
+}
+
+// ---- git ----
+
+export interface GitFileEntry {
+  path: string
+  /** porcelain XY status letters */
+  index: string
+  worktree: string
+}
+
+export interface GitStatus {
+  gitInstalled: boolean
+  isRepo: boolean
+  branch?: string
+  ahead: number
+  behind: number
+  hasUpstream: boolean
+  /** whether an `origin` remote is configured */
+  hasRemote: boolean
+  remoteUrl?: string
+  dirtyCount: number
+  staged: GitFileEntry[]
+  unstaged: GitFileEntry[]
+  untracked: string[]
+  lastCommit?: { hash: string; subject: string; author: string; dateIso: string }
+  fetchedAt: number
+}
+
+export interface GitActionResult {
+  ok: boolean
+  output?: string
+  error?: string
+}
+
+// ---- health ----
+
+export interface OutdatedDep {
+  name: string
+  current?: string
+  wanted: string
+  latest: string
+}
+
+export interface AuditCounts {
+  critical: number
+  high: number
+  moderate: number
+  low: number
+  info: number
+  total: number
+}
+
+export interface HealthReport {
+  projectId: string
+  scannedAt: number
+  outdated: OutdatedDep[]
+  audit: AuditCounts | null
+  auditError?: string
+  engines: { required?: string; installed: string; satisfied: boolean | null }
+  error?: string
+}
+
+export interface HealthSummary {
+  scannedAt: number
+  outdatedCount: number
+  vulnHighPlus: number
+  vulnTotal: number
+  enginesOk: boolean | null
+}
+
+export type HealthPhase = 'queued' | 'outdated' | 'audit' | 'engines' | 'done' | 'error'
+
+// ---- terminal ----
+
+export type TermShell = 'powershell' | 'pwsh' | 'gitbash' | 'cmd'
+
+export interface TermSessionInfo {
+  sessionId: string
+  projectId?: string
+  shell: TermShell
+  title: string
+  createdAt: number
 }
 
 export type CmsChoice = 'none' | 'payload' | 'strapi' | 'decap'
 
+export type ScaffoldPluginId =
+  | 'prettier'
+  | 'eslint'
+  | 'vitest'
+  | 'react-router'
+  | 'pinia'
+  | 'lucide'
+  | 'zustand'
+  | 'tanstack-query'
+
 export interface ScaffoldOptions {
-  framework: 'next' | 'vite-react' | 'vite-vue' | 'vite-vanilla'
+  framework: 'next' | 'vite-react' | 'vite-vue' | 'vite-vanilla' | 'electron'
   cms: CmsChoice
   typescript: boolean
   tailwind: boolean
+  plugins?: ScaffoldPluginId[]
   name: string
   parentDir: string
   preferredPort?: number
@@ -125,6 +407,21 @@ export interface ToolStatus {
   version?: string
 }
 
+export type InstallPhase = 'installing' | 'done' | 'error'
+
+export interface InstallState {
+  toolId: string
+  phase: InstallPhase
+  /** install (default) or uninstall — same state machine, different UI label */
+  mode?: 'install' | 'uninstall'
+  lines: LogLine[]
+  error?: string
+  startedAt: number
+  finishedAt?: number
+  /** re-detected status after a successful install/uninstall */
+  status?: ToolStatus
+}
+
 export type ServiceState = 'running' | 'stopped' | 'pending' | 'unknown'
 
 export interface DbService {
@@ -136,6 +433,81 @@ export interface DbService {
   rawState: string
   version?: string
   binPath?: string
+}
+
+// ---- DevTune website integration ----
+
+export interface LicenseState {
+  activated: boolean
+  /** signature + expiry/grace verified */
+  valid: boolean
+  /** token expired but inside offline grace window */
+  inGrace: boolean
+  plan?: string
+  tier?: string
+  email?: string
+  userName?: string
+  avatarUrl?: string
+  signedIn?: boolean
+  seatsUsed?: number
+  /** masked, e.g. DVF-****-****-****-A1B2 */
+  licenseKey?: string
+  /** marketing/display key e.g. freeappdevflow2026 */
+  displayKey?: string
+  expiresAt?: string | null
+  tokenExpiresAt?: number
+  graceUntil?: number
+  lastValidatedAt?: number
+  entitlements?: Record<string, string>
+  seatLimit?: number
+  serverUrl: string
+  appVersion: string
+  deviceLabel?: string
+  /** days remaining for freeapp tier */
+  daysRemaining?: number
+}
+
+export interface UpdateProgress {
+  phase: 'idle' | 'downloading' | 'verifying' | 'applying' | 'restarting' | 'error'
+  percent: number
+  message: string
+  version?: string
+  error?: string
+}
+
+export interface UpdateAvailablePayload {
+  version: string
+  required: boolean
+  releaseNotes?: string | null
+}
+
+export interface ActivateOptions {
+  email?: string
+  password?: string
+  licenseKey?: string
+}
+
+export interface LicenseActionResult {
+  ok: boolean
+  error?: string
+  state?: LicenseState
+}
+
+export interface UpdateCheckResult {
+  ok: boolean
+  error?: string
+  currentVersion: string
+  updateAvailable?: boolean
+  required?: boolean
+  severity?: string
+  latest?: {
+    version: string
+    downloadUrl?: string | null
+    checksum?: string | null
+    sizeBytes?: number | null
+    releaseNotes?: string | null
+    releasedAt?: string
+  }
 }
 
 export type SslMode = 'disable' | 'prefer' | 'require'

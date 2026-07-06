@@ -61,6 +61,21 @@ export const hints: Record<string, Hint> = {
     ],
     recommendation: 'Great for experiments and tiny pages. For anything with real UI complexity, pick React or Vue.',
   },
+  electron: {
+    title: 'Electron + React',
+    useCases: [
+      'Desktop apps for Windows, macOS and Linux from one codebase',
+      'Developer tools, utilities and internal apps that need native menus and file access',
+      'Apps that reuse your React skills with Vite hot-reload in the renderer',
+    ],
+    limitations: [
+      'Larger install size and memory use than a pure web app',
+      'Code signing and auto-update need extra setup for production releases',
+      'The scaffold includes ESLint and Prettier — add-on list skips those duplicates',
+    ],
+    recommendation:
+      'Pick this when you need a real desktop app. DevFlow itself is built with Electron — this template uses the same electron-vite stack.',
+  },
   'cms-none': {
     title: 'No CMS',
     useCases: [

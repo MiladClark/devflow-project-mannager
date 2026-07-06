@@ -14,11 +14,14 @@ import {
   Loader2,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Server, Wrench, FolderKanban } from 'lucide-react'
+import { Wrench, FolderKanban } from 'lucide-react'
 import { api, isElectron } from '../lib/ipc'
 import { useApp } from '../state/store'
+import { notify } from '../state/notifications'
 import type { DockerStatus, DbContainer, LogLine, DbKind, DbService, DbConnection } from '../shared/types'
 import { LogViewer } from '../components/LogViewer'
+import { PageSection } from '../components/PageSection'
+import { SkeletonServiceCards } from '../components/Skeleton'
 
 function StateBadge({ state }: { state: DbContainer['state'] }) {
   const running = state === 'running'
@@ -164,7 +167,12 @@ function LocalServices({
     setError('')
     const res = await api.dbServiceAction(name, action)
     setBusy('')
-    if (!res.ok) setError(res.error ?? `Could not ${action} ${name}`)
+    if (!res.ok) {
+      setError(res.error ?? `Could not ${action} ${name}`)
+      notify('error', `Could not ${action} ${name}`, res.error)
+    } else {
+      notify('success', `${name} ${action === 'start' ? 'started' : 'stopped'}`)
+    }
     onChanged()
   }
 
@@ -173,18 +181,13 @@ function LocalServices({
   if (loaded && !services.some((s) => s.kind === 'postgres')) missing.push('PostgreSQL')
 
   return (
-    <section className="flex flex-col gap-3">
-      <h3 className="flex items-center gap-2 text-sm font-semibold tracking-wider text-slate-400 uppercase">
-        <Server size={14} /> Local Windows Services
-        {!isElectron && (
-          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-amber-300">
-            Preview mode — sample data, controls work in the desktop app
-          </span>
-        )}
-      </h3>
-
+    <div className="flex flex-col gap-3">
+      {!loaded ? (
+        <SkeletonServiceCards count={2} />
+      ) : (
+        <>
       {services.length > 0 && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {services.map((s) => (
             <div key={s.name} className="rounded-xl border border-edge bg-panel p-4">
               <div className="flex items-center justify-between">
@@ -235,7 +238,9 @@ function LocalServices({
       )}
 
       {missing.length > 0 && <InstallHint missing={missing} />}
-    </section>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -355,6 +360,7 @@ export function Database() {
   const [services, setServices] = useState<DbService[]>([])
   const [servicesLoaded, setServicesLoaded] = useState(false)
   const [connections, setConnections] = useState<DbConnection[]>([])
+  const [launchingDocker, setLaunchingDocker] = useState(false)
 
   useEffect(() => {
     api.listConnections().then(setConnections)
@@ -386,6 +392,30 @@ export function Database() {
     return () => clearInterval(t)
   }, [refresh])
 
+  async function startDocker() {
+    setLaunchingDocker(true)
+    const res = await api.dockerLaunch()
+    if (!res.ok) {
+      setLaunchingDocker(false)
+      notify('error', 'Could not start Docker Desktop', res.error)
+      return
+    }
+    notify('info', 'Starting Docker Desktop', 'The engine can take up to a minute to become ready.')
+    // Docker Desktop boots slowly — poll the engine until it answers (~90s max)
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 3000))
+      const st = await api.dockerStatus()
+      if (st.running) {
+        await refresh()
+        notify('success', 'Docker is ready')
+        setLaunchingDocker(false)
+        return
+      }
+    }
+    setLaunchingDocker(false)
+    notify('warn', 'Docker is taking longer than expected', 'Hit refresh once Docker Desktop finishes starting.')
+  }
+
   const container = containers.find((c) => c.id === selected)
 
   const loadDatabases = useCallback(async () => {
@@ -410,8 +440,11 @@ export function Database() {
 
   async function act(id: string, action: 'start' | 'stop' | 'restart') {
     setBusyAction(id + action)
-    await api.dockerContainerAction(id, action)
+    const c = containers.find((x) => x.id === id)
+    const res = await api.dockerContainerAction(id, action)
     setBusyAction('')
+    if (res && !res.ok) notify('error', `Could not ${action} container`, res.error)
+    else notify('success', `Container ${action === 'stop' ? 'stopped' : action === 'start' ? 'started' : 'restarted'}`, c?.name)
     await refresh()
     await loadDatabases()
   }
@@ -419,20 +452,28 @@ export function Database() {
   async function createDb() {
     if (!container || !newDb) return
     setCreateMsg(null)
+    const name = newDb
     const res = await api.dockerCreateDatabase(container, newDb)
     if (res.ok) {
-      setCreateMsg({ ok: true, text: `Database "${newDb}" created.` })
+      setCreateMsg({ ok: true, text: `Database "${name}" created.` })
       setNewDb('')
       await loadDatabases()
+      notify('success', 'Database created', `${name} in ${container.name}`)
     } else {
       setCreateMsg({ ok: false, text: res.error ?? 'Failed to create database' })
+      notify('error', 'Could not create database', res.error)
     }
   }
 
   return (
-    <div className="flex flex-col gap-5 p-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-white">Databases</h2>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-6 pb-12">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-bold text-white">Databases</h2>
+          <p className="text-sm text-slate-500">
+            Local MySQL/PostgreSQL Windows services and Docker containers for development.
+          </p>
+        </div>
         <div className="flex items-center gap-3">
           {status && (
             <span
@@ -454,27 +495,53 @@ export function Database() {
             <RefreshCw size={15} />
           </button>
         </div>
-      </div>
+      </header>
 
-      <LocalServices services={services} loaded={servicesLoaded} connections={connections} onChanged={refreshServices} />
+      <PageSection
+        title="Local Windows services"
+        description="MySQL and PostgreSQL installed as Windows services — start or stop them without Docker."
+        action={
+          !isElectron ? (
+            <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+              Preview mode
+            </span>
+          ) : undefined
+        }
+      >
+        <LocalServices services={services} loaded={servicesLoaded} connections={connections} onChanged={refreshServices} />
+      </PageSection>
 
-      <h3 className="text-sm font-semibold tracking-wider text-slate-400 uppercase">Docker Containers</h3>
-
-      {status && !status.running && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 text-sm text-slate-300">
-          {status.installed ? (
-            <>Docker CLI is installed but the engine is not reachable. Start <b>Docker Desktop</b> and hit refresh.</>
-          ) : (
-            <>
-              Docker was not found on this system. Install <b>Docker Desktop for Windows</b> from the{' '}
-              <Link to="/tools" className="font-semibold text-accent hover:underline">
-                App and Tools
-              </Link>{' '}
-              page to manage MySQL and PostgreSQL containers from here.
-            </>
-          )}
-        </div>
-      )}
+      <PageSection
+        title="Docker containers"
+        description="Run MySQL or PostgreSQL in isolated containers when you prefer Docker over native installs."
+      >
+        {status && !status.running && (
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 text-sm text-slate-300">
+            {status.installed ? (
+              <>
+                <span>
+                  Docker CLI is installed but the engine is not reachable. Start <b>Docker Desktop</b> and hit refresh.
+                </span>
+                <button
+                  onClick={startDocker}
+                  disabled={launchingDocker || !isElectron}
+                  className="flex shrink-0 items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:bg-cyan-300 disabled:opacity-50"
+                >
+                  {launchingDocker ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />}
+                  {launchingDocker ? 'Starting Docker...' : 'Start Docker Desktop'}
+                </button>
+              </>
+            ) : (
+              <span>
+                Docker was not found on this system. Install <b>Docker Desktop for Windows</b> from the{' '}
+                <Link to="/tools" className="font-semibold text-accent hover:underline">
+                  App and Tools
+                </Link>{' '}
+                page to manage MySQL and PostgreSQL containers from here.
+              </span>
+            )}
+          </div>
+        )}
 
       {status?.running && (
         <>
@@ -613,7 +680,8 @@ export function Database() {
             </div>
           )}
         </>
-      )}
+        )}
+      </PageSection>
     </div>
   )
 }

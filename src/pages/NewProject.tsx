@@ -1,39 +1,64 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Check, FolderOpen, Loader2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, FolderOpen, Loader2, Lock } from 'lucide-react'
 import { api } from '../lib/ipc'
 import { useApp } from '../state/store'
-import type { CmsChoice, LogLine, ScaffoldOptions } from '../shared/types'
+import { useEntitlements } from '../lib/entitlements'
+import { notify } from '../state/notifications'
+import type { CmsChoice, LogLine, ScaffoldOptions, PortCheck, PortOwner, ScaffoldPluginId } from '../shared/types'
+import { SCAFFOLD_PLUGINS, availablePlugins, normalizePlugins } from '../shared/scaffoldPlugins'
+import { TechLogo, cmsLogoId, frameworkLogoId } from '../components/TechLogo'
 import { LogViewer } from '../components/LogViewer'
 import { HintPopover } from '../components/HintPopover'
+import { Switch } from '../components/Switch'
+import { UpgradePrompt } from '../components/UpgradePrompt'
+import { PortConflict } from '../components/PortConflict'
 
 type FrameworkChoice = ScaffoldOptions['framework']
 
-const frameworks: { id: FrameworkChoice; name: string; desc: string; badge: string; badgeCls: string }[] = [
-  { id: 'next', name: 'Next.js 15', desc: 'Full-stack React framework with App Router', badge: 'N', badgeCls: 'bg-white text-black' },
-  { id: 'vite-react', name: 'Vite + React', desc: 'Fast SPA development with React', badge: 'V', badgeCls: 'bg-gradient-to-br from-violet-500 to-amber-400 text-white' },
-  { id: 'vite-vue', name: 'Vite + Vue', desc: 'Fast SPA development with Vue 3', badge: 'V', badgeCls: 'bg-emerald-900 text-emerald-300' },
-  { id: 'vite-vanilla', name: 'Vite Vanilla', desc: 'Plain TypeScript/JavaScript with Vite', badge: 'V', badgeCls: 'bg-slate-700 text-slate-200' },
+const frameworks: { id: FrameworkChoice; name: string; desc: string }[] = [
+  { id: 'next', name: 'Next.js 15', desc: 'Full-stack React framework with App Router' },
+  { id: 'vite-react', name: 'Vite + React', desc: 'Fast SPA development with React' },
+  { id: 'vite-vue', name: 'Vite + Vue', desc: 'Fast SPA development with Vue 3' },
+  { id: 'vite-vanilla', name: 'Vite Vanilla', desc: 'Plain TypeScript/JavaScript with Vite' },
+  { id: 'electron', name: 'Electron + React', desc: 'Cross-platform desktop app with Electron, Vite and React' },
 ]
 
-const cmsOptions: { id: CmsChoice; name: string; desc: string; badge: string; badgeCls: string; hintKey: string }[] = [
-  { id: 'none', name: 'No CMS', desc: 'Content in code, database or external API', badge: '—', badgeCls: 'bg-slate-800 text-slate-400', hintKey: 'cms-none' },
-  { id: 'payload', name: 'Payload CMS', desc: 'Code-first CMS inside your Next.js app', badge: 'P', badgeCls: 'bg-slate-950 text-white border border-slate-600', hintKey: 'cms-payload' },
-  { id: 'strapi', name: 'Strapi', desc: 'Standalone headless CMS with admin panel', badge: 'S', badgeCls: 'bg-indigo-900 text-indigo-300', hintKey: 'cms-strapi' },
-  { id: 'decap', name: 'Decap CMS', desc: 'Git-based CMS, content as Markdown in repo', badge: 'D', badgeCls: 'bg-teal-900 text-teal-300', hintKey: 'cms-decap' },
+const cmsOptions: { id: CmsChoice; name: string; desc: string; hintKey: string }[] = [
+  { id: 'none', name: 'No CMS', desc: 'Content in code, database or external API', hintKey: 'cms-none' },
+  { id: 'payload', name: 'Payload CMS', desc: 'Code-first CMS inside your Next.js app', hintKey: 'cms-payload' },
+  { id: 'strapi', name: 'Strapi', desc: 'Standalone headless CMS with admin panel', hintKey: 'cms-strapi' },
+  { id: 'decap', name: 'Decap CMS', desc: 'Git-based CMS, content as Markdown in repo', hintKey: 'cms-decap' },
 ]
 
 const steps = ['Framework', 'Configuration', 'Summary & Install']
 
 export function NewProject() {
   const navigate = useNavigate()
-  const { settings, refreshProjects } = useApp()
+  const { settings, refreshProjects, projects } = useApp()
+  const entitlements = useEntitlements()
+  const projectLimitReached = entitlements.loaded && projects.length >= entitlements.maxProjects
   const [step, setStep] = useState(0)
 
   const [framework, setFramework] = useState<FrameworkChoice>('next')
   const [cms, setCms] = useState<CmsChoice>('none')
   const [typescript, setTypescript] = useState(true)
   const [tailwind, setTailwind] = useState(true)
+  const [plugins, setPlugins] = useState<ScaffoldPluginId[]>(['prettier', 'lucide'])
+
+  const pluginChoices = availablePlugins({ framework, cms })
+  const activePlugins = normalizePlugins(plugins, { framework, cms })
+
+  useEffect(() => {
+    setPlugins((cur) => normalizePlugins(cur, { framework, cms }))
+  }, [framework, cms])
+
+  function togglePlugin(id: ScaffoldPluginId) {
+    setPlugins((cur) => {
+      const normalized = normalizePlugins(cur, { framework, cms })
+      return normalized.includes(id) ? normalized.filter((p) => p !== id) : [...normalized, id]
+    })
+  }
 
   // Payload is TypeScript-only and ships its own Next.js app; Strapi ships its own stack
   const frameworkLocked = cms === 'payload' || cms === 'strapi'
@@ -46,6 +71,33 @@ export function NewProject() {
   const [name, setName] = useState('my-app')
   const [parentDir, setParentDir] = useState('')
   const [port, setPort] = useState('')
+  const [portCheck, setPortCheck] = useState<PortCheck | null>(null)
+  const [portOwner, setPortOwner] = useState<PortOwner | null>(null)
+
+  useEffect(() => {
+    const n = Number(port)
+    if (!port || !Number.isInteger(n) || n < 1 || n > 65535) {
+      setPortCheck(null)
+      setPortOwner(null)
+      return
+    }
+    let cancelled = false
+    const t = setTimeout(async () => {
+      const res = await api.checkPort(n)
+      if (cancelled) return
+      setPortCheck(res)
+      if (!res.free) {
+        const owner = await api.getPortOwner(n)
+        if (!cancelled) setPortOwner(owner)
+      } else {
+        setPortOwner(null)
+      }
+    }, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [port])
 
   const [installing, setInstalling] = useState(false)
   const [installLog, setInstallLog] = useState<LogLine[]>([])
@@ -71,6 +123,7 @@ export function NewProject() {
       cms,
       typescript: effectiveTs,
       tailwind,
+      plugins: activePlugins,
       name,
       parentDir,
       preferredPort: port ? Number(port) : undefined,
@@ -80,8 +133,10 @@ export function NewProject() {
       doneProjectId.current = res.project.id
       setDone(true)
       await refreshProjects()
+      notify('success', 'Project created', `${res.project.name} is ready`, `/projects/${res.project.id}`)
     } else {
       setError(res.error ?? 'Unknown error')
+      notify('error', 'Project creation failed', res.error)
     }
   }
 
@@ -93,6 +148,12 @@ export function NewProject() {
         </button>
         <h2 className="mt-2 text-2xl font-bold text-white">Create New Project</h2>
       </div>
+
+      {projectLimitReached && (
+        <UpgradePrompt
+          message={`The Free plan is limited to ${entitlements.maxProjects} projects (you have ${projects.length}). Upgrade to create unlimited projects.`}
+        />
+      )}
 
       <div className="flex items-center gap-2 text-sm">
         {steps.map((s, i) => (
@@ -137,9 +198,7 @@ export function NewProject() {
                           : 'cursor-pointer border-edge bg-panel hover:border-slate-600'
                     }`}
                   >
-                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-bold ${f.badgeCls}`}>
-                      {f.badge}
-                    </span>
+                    <TechLogo id={frameworkLogoId(f.id)} />
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold text-white">{f.name}</span>
                       <span className="block text-xs text-slate-500">{f.desc}</span>
@@ -154,51 +213,101 @@ export function NewProject() {
           <div>
             <p className="mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">Headless CMS</p>
             <div className="grid grid-cols-2 gap-3">
-              {cmsOptions.map((c) => (
-                <div
-                  key={c.id}
-                  role="button"
-                  onClick={() => pickCms(c.id)}
-                  className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 text-left transition-colors ${
-                    cms === c.id ? 'border-accent bg-accent/5' : 'border-edge bg-panel hover:border-slate-600'
-                  }`}
-                >
-                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg font-bold ${c.badgeCls}`}>
-                    {c.badge}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold text-white">{c.name}</span>
-                    <span className="block text-xs text-slate-500">{c.desc}</span>
-                  </span>
-                  <HintPopover hintKey={c.hintKey} />
-                </div>
-              ))}
+              {cmsOptions.map((c) => {
+                const locked = c.id !== 'none' && !entitlements.premiumTemplates
+                return (
+                  <div
+                    key={c.id}
+                    role="button"
+                    onClick={() => !locked && pickCms(c.id)}
+                    title={locked ? 'CMS templates require a Pro license or an active trial' : undefined}
+                    className={`flex items-center gap-3 rounded-xl border p-4 text-left transition-colors ${
+                      cms === c.id
+                        ? 'border-accent bg-accent/5'
+                        : locked
+                          ? 'border-edge bg-panel opacity-50'
+                          : 'cursor-pointer border-edge bg-panel hover:border-slate-600'
+                    }`}
+                  >
+                    <TechLogo id={cmsLogoId(c.id)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2 font-semibold text-white">
+                        {c.name}
+                        {locked && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                            <Lock size={9} /> PRO
+                          </span>
+                        )}
+                      </span>
+                      <span className="block text-xs text-slate-500">{c.desc}</span>
+                    </span>
+                    <HintPopover hintKey={c.hintKey} />
+                  </div>
+                )
+              })}
             </div>
           </div>
 
-          <div className="flex gap-6">
-            <label className={`flex items-center gap-2 text-sm text-slate-300 ${cms === 'payload' ? 'opacity-60' : ''}`}>
-              <input
-                type="checkbox"
+          {pluginChoices.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs font-semibold tracking-wider text-slate-500 uppercase">Add-ons &amp; Plugins</p>
+              <p className="mb-3 text-xs text-slate-600">
+                Optional packages installed after the project scaffold. Availability depends on your framework and CMS.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {pluginChoices.map((id) => {
+                  const def = SCAFFOLD_PLUGINS[id]
+                  const selected = activePlugins.includes(id)
+                  return (
+                    <div
+                      key={id}
+                      role="button"
+                      onClick={() => togglePlugin(id)}
+                      className={`flex items-center gap-3 rounded-xl border p-4 text-left transition-colors ${
+                        selected
+                          ? 'border-accent bg-accent/5'
+                          : 'cursor-pointer border-edge bg-panel hover:border-slate-600'
+                      }`}
+                    >
+                      <TechLogo id={def.logo} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold text-white">{def.name}</span>
+                        <span className="block text-xs leading-relaxed text-slate-500">{def.description}</span>
+                      </span>
+                      <span onClick={(e) => e.stopPropagation()}>
+                        <Switch size="sm" checked={selected} onChange={() => togglePlugin(id)} />
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-edge bg-panel2/40 p-4">
+            <p className="mb-3 text-xs font-semibold tracking-wider text-slate-500 uppercase">Project options</p>
+            <div className="flex flex-wrap gap-6">
+            <div className={`flex items-center gap-2.5 text-sm text-slate-300 ${cms === 'payload' ? 'opacity-60' : ''}`}>
+              <Switch
+                size="sm"
                 checked={effectiveTs}
                 disabled={cms === 'payload'}
-                onChange={(e) => setTypescript(e.target.checked)}
-                className="accent-cyan-400"
+                onChange={setTypescript}
               />
               TypeScript {cms === 'payload' && <span className="text-xs text-amber-400">(required by Payload)</span>}
               <HintPopover hintKey="typescript" />
-            </label>
-            <label className={`flex items-center gap-2 text-sm text-slate-300 ${cms === 'strapi' ? 'opacity-60' : ''}`}>
-              <input
-                type="checkbox"
+            </div>
+            <div className={`flex items-center gap-2.5 text-sm text-slate-300 ${cms === 'strapi' ? 'opacity-60' : ''}`}>
+              <Switch
+                size="sm"
                 checked={tailwind}
                 disabled={cms === 'strapi'}
-                onChange={(e) => setTailwind(e.target.checked)}
-                className="accent-cyan-400"
+                onChange={setTailwind}
               />
               Tailwind CSS {cms === 'strapi' && <span className="text-xs text-amber-400">(n/a for Strapi)</span>}
               <HintPopover hintKey="tailwind" />
-            </label>
+            </div>
+            </div>
           </div>
         </div>
       )}
@@ -246,8 +355,32 @@ export function NewProject() {
               value={port}
               onChange={(e) => setPort(e.target.value.replace(/\D/g, ''))}
               placeholder={cms === 'strapi' ? '1337 (Strapi default)' : 'framework default'}
-              className="w-48 rounded-lg border border-edge bg-bg px-3 py-2 text-sm text-slate-200 outline-none focus:border-accent/60"
+              className={`w-48 rounded-lg border bg-bg px-3 py-2 text-sm text-slate-200 outline-none ${
+                portCheck && (!portCheck.free || portCheck.reserved || portCheck.usedByProject)
+                  ? 'border-rose-500/60'
+                  : 'border-edge focus:border-accent/60'
+              }`}
             />
+            {portCheck && portCheck.reserved && (
+              <p className="mt-1 text-xs text-rose-400">Port {portCheck.port} is reserved by your port rules.</p>
+            )}
+            {portCheck && portCheck.usedByProject && (
+              <p className="mt-1 text-xs text-rose-400">
+                Port {portCheck.port} is assigned to project "{portCheck.usedByProject}".
+              </p>
+            )}
+            {portCheck && !portCheck.free && portOwner && (
+              <div className="mt-2">
+                <PortConflict
+                  owner={portOwner}
+                  onResolved={async () => {
+                    setPortOwner(null)
+                    setPortCheck(await api.checkPort(Number(port)))
+                  }}
+                  onDismiss={() => setPortOwner(null)}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -261,6 +394,14 @@ export function NewProject() {
                 <tr><td className="text-slate-500">Headless CMS</td><td className="text-white">{cmsOptions.find((c) => c.id === cms)?.name}</td></tr>
                 <tr><td className="text-slate-500">Language</td><td className="text-white">{effectiveTs ? 'TypeScript' : 'JavaScript'}</td></tr>
                 <tr><td className="text-slate-500">Styling</td><td className="text-white">{cms !== 'strapi' && tailwind ? 'Tailwind CSS' : 'None'}</td></tr>
+                <tr>
+                  <td className="text-slate-500">Add-ons</td>
+                  <td className="text-white">
+                    {activePlugins.length > 0
+                      ? activePlugins.map((id) => SCAFFOLD_PLUGINS[id].name).join(', ')
+                      : 'None'}
+                  </td>
+                </tr>
                 <tr><td className="text-slate-500">Name</td><td className="text-white">{name}</td></tr>
                 <tr><td className="text-slate-500">Path</td><td className="text-white">{parentDir}\{name}</td></tr>
                 <tr><td className="text-slate-500">Port</td><td className="text-white">{port || 'framework default'}</td></tr>
@@ -307,7 +448,8 @@ export function NewProject() {
         ) : (
           <button
             onClick={install}
-            disabled={installing || done}
+            disabled={installing || done || projectLimitReached}
+            title={projectLimitReached ? 'Free plan project limit reached — upgrade to continue' : undefined}
             className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-accent-fg hover:bg-cyan-300 disabled:opacity-40"
           >
             {installing ? (

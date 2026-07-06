@@ -57,6 +57,7 @@ export const TOOLS: ToolDef[] = [
     installCmd: 'npm install -g pnpm',
     url: 'https://pnpm.io/',
     cmd: 'pnpm',
+    paths: ['%APPDATA%\\npm\\pnpm.cmd'],
   },
   {
     id: 'yarn',
@@ -66,6 +67,7 @@ export const TOOLS: ToolDef[] = [
     installCmd: 'npm install -g yarn',
     url: 'https://yarnpkg.com/',
     cmd: 'yarn',
+    paths: ['%APPDATA%\\npm\\yarn.cmd'],
   },
   {
     id: 'python',
@@ -153,6 +155,52 @@ export const TOOLS: ToolDef[] = [
     winget: 'Microsoft.VisualStudioCode',
     url: 'https://code.visualstudio.com/',
     cmd: 'code',
+    paths: [
+      '%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\bin\\code.cmd',
+      '%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\bin\\code',
+    ],
+  },
+  {
+    id: 'cursor',
+    name: 'Cursor',
+    description: 'AI-powered code editor — VS Code fork with built-in AI assistance.',
+    category: 'editor',
+    winget: 'Anysphere.Cursor',
+    url: 'https://cursor.com/',
+    cmd: 'cursor',
+    paths: [
+      '%LOCALAPPDATA%\\Programs\\cursor\\resources\\app\\bin\\cursor.cmd',
+      '%LOCALAPPDATA%\\Programs\\cursor\\resources\\app\\bin\\cursor',
+    ],
+  },
+  {
+    id: 'fnm',
+    name: 'fnm',
+    description: 'Fast Node version manager — switch Node versions per project.',
+    category: 'runtime',
+    winget: 'Schniz.fnm',
+    url: 'https://github.com/Schniz/fnm',
+    cmd: 'fnm',
+  },
+  {
+    id: 'mkcert',
+    name: 'mkcert',
+    description: 'Create locally-trusted HTTPS certificates for development.',
+    category: 'utility',
+    winget: 'FiloSottile.mkcert',
+    url: 'https://github.com/FiloSottile/mkcert',
+    cmd: 'mkcert',
+    paths: ['%LOCALAPPDATA%\\Microsoft\\WinGet\\Links\\mkcert.exe', '%ChocolateyInstall%\\bin\\mkcert.exe'],
+  },
+  {
+    id: 'caddy',
+    name: 'Caddy',
+    description: 'Reverse proxy for local HTTPS domains (used by DevFlow Local HTTPS).',
+    category: 'utility',
+    winget: 'Caddy.Caddy',
+    url: 'https://caddyserver.com/',
+    cmd: 'caddy',
+    paths: ['%LOCALAPPDATA%\\Microsoft\\WinGet\\Links\\caddy.exe', '%ChocolateyInstall%\\bin\\caddy.exe'],
   },
   // terminals
   {
@@ -197,5 +245,14 @@ export const TOOLS: ToolDef[] = [
 export function installCommandFor(t: ToolDef): string | undefined {
   if (t.installCmd) return t.installCmd
   if (t.winget) return `winget install --id ${t.winget} -e`
+  return undefined
+}
+
+export function uninstallCommandFor(t: ToolDef): string | undefined {
+  if (t.installCmd?.startsWith('npm install -g ')) {
+    const pkg = t.installCmd.replace('npm install -g ', '').trim()
+    return `npm uninstall -g ${pkg}`
+  }
+  if (t.winget) return `winget uninstall --id ${t.winget} -e`
   return undefined
 }

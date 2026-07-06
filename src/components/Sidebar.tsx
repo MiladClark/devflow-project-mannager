@@ -1,32 +1,10 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Link } from 'react-router-dom'
-import {
-  LayoutDashboard,
-  FolderKanban,
-  ScrollText,
-  Settings,
-  Zap,
-  Database,
-  Plug,
-  Wrench,
-  Play,
-  Square,
-  Loader2,
-} from 'lucide-react'
-import { useApp } from '../state/store'
+import { Zap, Play, Square, Loader2 } from 'lucide-react'
+import { NAV_GROUPS } from '../lib/nav'
 import { api, isElectron } from '../lib/ipc'
 import type { DbService } from '../shared/types'
 import { APP_VERSION } from '../version'
-
-const nav = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/projects', label: 'Projects', icon: FolderKanban },
-  { to: '/logs', label: 'Logs', icon: ScrollText },
-  { to: '/database', label: 'Database', icon: Database },
-  { to: '/connections', label: 'Connections', icon: Plug },
-  { to: '/tools', label: 'App and Tools', icon: Wrench },
-  { to: '/settings', label: 'Settings', icon: Settings },
-]
 
 function SidebarServices() {
   const [services, setServices] = useState<DbService[]>([])
@@ -98,46 +76,33 @@ function SidebarServices() {
 }
 
 export function Sidebar() {
-  const projects = useApp((s) => s.projects)
-  const counts = new Map<string, number>()
-  for (const p of projects) {
-    for (const f of p.frameworks) counts.set(f, (counts.get(f) ?? 0) + 1)
-  }
-
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-edge bg-panel2">
-      <nav className="flex flex-col gap-1 p-3">
-        {nav.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                isActive ? 'bg-slate-700/60 text-white' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
-              }`
-            }
-          >
-            <Icon size={17} />
-            {label}
-          </NavLink>
+      <nav className="flex flex-col gap-4 p-3">
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={group.title} className="flex flex-col gap-1">
+            {gi > 0 && <div className="mb-1 border-t border-edge/60" role="separator" />}
+            <p className="px-2 pb-0.5 text-[10px] font-semibold tracking-wider text-slate-600 uppercase">{group.title}</p>
+            {group.pages.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive ? 'bg-slate-700/60 text-white' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                  }`
+                }
+              >
+                <Icon size={17} />
+                {label}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
 
-      <div className="mx-3 my-2 border-t border-edge" />
-
-      <div className="flex-1 overflow-y-auto px-3">
-        <p className="px-2 pb-2 text-[11px] font-semibold tracking-wider text-slate-500 uppercase">Frameworks</p>
-        {[...counts.entries()].map(([name, count]) => (
-          <div key={name} className="flex items-center justify-between rounded-lg px-3 py-1.5 text-sm text-slate-400">
-            <span>{name}</span>
-            <span className="rounded-full bg-slate-800 px-2 text-xs text-slate-300">{count}</span>
-          </div>
-        ))}
-        {counts.size === 0 && <p className="px-3 text-xs text-slate-600">No projects yet</p>}
-      </div>
-
-      <div className="mx-3 my-2 border-t border-edge" />
+      <div className="flex-1" />
 
       <SidebarServices />
 

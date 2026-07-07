@@ -10,7 +10,6 @@ type ChipVisual = {
   subtitle: string
   icon: typeof Crown
   iconWrap: string
-  border: string
   hover: string
 }
 
@@ -21,8 +20,7 @@ function chipVisual(state: LicenseState | null): ChipVisual {
       subtitle: 'DevTune account',
       icon: User,
       iconWrap: 'bg-slate-700/50 text-slate-300',
-      border: 'border-edge hover:border-accent/40',
-      hover: 'hover:bg-panel',
+      hover: 'hover:bg-panel/80',
     }
   }
 
@@ -32,7 +30,6 @@ function chipVisual(state: LicenseState | null): ChipVisual {
       subtitle: 'Offline grace',
       icon: ShieldAlert,
       iconWrap: 'bg-amber-500/15 text-amber-400',
-      border: 'border-amber-500/35 hover:border-amber-500/50',
       hover: 'hover:bg-amber-500/5',
     }
   }
@@ -44,8 +41,7 @@ function chipVisual(state: LicenseState | null): ChipVisual {
       subtitle: days > 0 ? `Trial · ${days} day${days === 1 ? '' : 's'}` : 'Trial expired',
       icon: Sparkles,
       iconWrap: days > 0 ? 'bg-sky-500/15 text-sky-400' : 'bg-slate-700/50 text-slate-400',
-      border: days > 0 ? 'border-sky-500/35 hover:border-sky-500/50' : 'border-edge',
-      hover: days > 0 ? 'hover:bg-sky-500/5' : 'hover:bg-panel',
+      hover: days > 0 ? 'hover:bg-sky-500/5' : 'hover:bg-panel/80',
     }
   }
 
@@ -55,7 +51,6 @@ function chipVisual(state: LicenseState | null): ChipVisual {
       subtitle: 'Trial · Pro features',
       icon: ShieldCheck,
       iconWrap: 'bg-sky-500/15 text-sky-400',
-      border: 'border-sky-500/35 hover:border-sky-500/50',
       hover: 'hover:bg-sky-500/5',
     }
   }
@@ -67,7 +62,6 @@ function chipVisual(state: LicenseState | null): ChipVisual {
       subtitle: `${plan} · Licensed`,
       icon: Crown,
       iconWrap: 'bg-emerald-500/15 text-emerald-400',
-      border: 'border-emerald-500/35 hover:border-emerald-500/50',
       hover: 'hover:bg-emerald-500/5',
     }
   }
@@ -77,8 +71,7 @@ function chipVisual(state: LicenseState | null): ChipVisual {
     subtitle: 'Free',
     icon: Sparkles,
     iconWrap: 'bg-slate-700/50 text-slate-300',
-    border: 'border-edge hover:border-accent/40',
-    hover: 'hover:bg-panel',
+    hover: 'hover:bg-panel/80',
   }
 }
 
@@ -114,7 +107,7 @@ export function UserProfileChip() {
     <button
       type="button"
       onClick={() => navigate('/account')}
-      className={`press flex items-center gap-2.5 rounded-xl border px-2.5 py-1.5 transition-colors ${v.border} ${v.hover}`}
+      className={`press flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition-colors ${v.hover}`}
       title="Account & license"
     >
       {avatar ? (

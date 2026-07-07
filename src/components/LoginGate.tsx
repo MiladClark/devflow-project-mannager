@@ -41,7 +41,7 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
 
   if (signedIn === null) {
     return (
-      <FramelessChrome showLogo>
+      <FramelessChrome>
         <div className="flex h-full items-center justify-center bg-bg">
           <Loader2 className="animate-spin text-accent" size={32} />
         </div>
@@ -51,7 +51,7 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
 
   if (!signedIn) {
     return (
-      <FramelessChrome showLogo>
+      <FramelessChrome>
         <div className="flex h-full flex-col items-center justify-center gap-6 bg-bg px-6 text-center">
           <img src={logoBlue} alt="DevFlow" className="h-16 w-16" draggable={false} />
           <div>

@@ -20,7 +20,7 @@ export function DevTuneWebsiteButton() {
       type="button"
       onClick={() => api.openExternal(url)}
       title="Open DevTune website"
-      className="press flex h-9 w-9 items-center justify-center rounded-lg border border-edge text-slate-400 hover:border-accent/50 hover:text-slate-200"
+      className="app-toolbar-btn"
     >
       <Globe size={16} />
     </button>

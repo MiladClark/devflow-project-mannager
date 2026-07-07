@@ -178,6 +178,20 @@ pre,
   app-region: no-drag;
 }
 
+/* Segmented icon toolbar (matches DevTune website header controls) */
+.app-toolbar {
+  @apply inline-flex items-stretch overflow-visible rounded-xl border border-edge bg-panel/70 shadow-sm;
+}
+.app-toolbar-item + .app-toolbar-item {
+  @apply border-l border-edge;
+}
+.app-toolbar-btn {
+  @apply relative flex h-9 w-9 shrink-0 items-center justify-center text-slate-400 transition-colors duration-200 hover:bg-slate-800/60 hover:text-slate-200;
+}
+.app-toolbar-btn-danger:hover {
+  @apply bg-rose-600 text-white;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

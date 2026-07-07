@@ -46,22 +46,22 @@ export function NotificationBell() {
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={`relative ${open ? 'z-50' : 'z-0'}`}>
       <button
         onClick={toggle}
         title="Notifications"
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-edge text-slate-400 hover:border-accent/50 hover:text-slate-200"
+        className={`app-toolbar-btn ${unread > 0 ? '!w-auto gap-1.5 px-2' : ''}`}
       >
         <Bell size={16} />
         {unread > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-fg">
+          <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-accent-fg">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="animate-pop-in absolute top-11 right-0 z-50 w-80 overflow-hidden rounded-xl border border-edge bg-panel shadow-2xl">
+        <div className="animate-pop-in absolute top-[calc(100%+6px)] right-0 z-50 w-80 overflow-hidden rounded-xl border border-edge bg-panel shadow-2xl">
           <div className="flex items-center justify-between border-b border-edge px-4 py-2.5">
             <h4 className="text-sm font-semibold text-white">Notifications</h4>
             {items.length > 0 && (

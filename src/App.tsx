@@ -74,9 +74,6 @@ function Layout() {
     <div className="flex h-full flex-col">
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <Toaster />
-      <ConfirmDialog />
-      <UpdateRoot />
       <TopBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
@@ -113,6 +110,9 @@ export default function App() {
   return (
     <HashRouter>
       <Splash ready={loaded} />
+      <Toaster />
+      <ConfirmDialog />
+      <UpdateRoot />
       <LoginGate>
         <Layout />
       </LoginGate>

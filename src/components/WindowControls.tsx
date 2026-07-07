@@ -7,21 +7,36 @@ function ControlBtn({
   title,
   onClick,
   children,
-  hover,
-  className = '',
+  danger = false,
+  plain = false,
 }: {
   title: string
   onClick: () => void
   children: React.ReactNode
-  hover: string
-  className?: string
+  danger?: boolean
+  plain?: boolean
 }) {
+  if (plain) {
+    return (
+      <button
+        type="button"
+        title={title}
+        onClick={onClick}
+        className={`app-no-drag flex h-8 w-9 items-center justify-center rounded-md text-slate-400 transition-colors ${
+          danger ? 'hover:bg-rose-600 hover:text-white' : 'hover:bg-slate-800/80 hover:text-slate-200'
+        }`}
+      >
+        {children}
+      </button>
+    )
+  }
+
   return (
     <button
       type="button"
       title={title}
       onClick={onClick}
-      className={`app-no-drag pointer-events-auto flex h-8 w-9 items-center justify-center rounded-md text-slate-400 transition-colors ${hover} ${className}`}
+      className={`app-no-drag app-toolbar-btn ${danger ? 'app-toolbar-btn-danger' : ''}`}
     >
       {children}
     </button>
@@ -29,8 +44,15 @@ function ControlBtn({
 }
 
 /** Native-style minimize / maximize / close — shown when running frameless on Windows/Linux. */
-export function WindowControls() {
+export function WindowControls({
+  className = '',
+  variant = 'toolbar',
+}: {
+  className?: string
+  variant?: 'toolbar' | 'plain'
+}) {
   const [maximized, setMaximized] = useState(false)
+  const plain = variant === 'plain'
 
   useEffect(() => {
     if (!api.windowIsMaximized || !api.onWindowMaximized) return
@@ -55,31 +77,61 @@ export function WindowControls() {
 
   if (!api.windowMinimize) return null
 
-  return (
-    <div className="ml-2 flex shrink-0 items-center gap-1 border-l border-edge py-1 pl-3 pr-1">
-      <ControlBtn title="Minimize" onClick={() => api.windowMinimize!()} hover="hover:bg-slate-800/80 hover:text-slate-200">
-        <Minus size={15} strokeWidth={2} />
-      </ControlBtn>
-      <ControlBtn
-        title={maximized ? 'Restore' : 'Maximize'}
-        onClick={async () => {
-          const next = await api.windowToggleMaximize!()
-          setMaximized(next)
-        }}
-        hover="hover:bg-slate-800/80 hover:text-slate-200"
+  const minimizeBtn = (
+    <ControlBtn plain={plain} title="Minimize" onClick={() => api.windowMinimize!()}>
+      <Minus size={15} strokeWidth={2} />
+    </ControlBtn>
+  )
+
+  const maximizeBtn = (
+    <ControlBtn
+      plain={plain}
+      title={maximized ? 'Restore' : 'Maximize'}
+      onClick={async () => {
+        const next = await api.windowToggleMaximize!()
+        setMaximized(next)
+      }}
+    >
+      {maximized ? (
+        <span className="relative block h-3.5 w-3.5">
+          <Square size={11} strokeWidth={2} className="absolute top-0 right-0" />
+          <Square size={11} strokeWidth={2} className="absolute bottom-0 left-0" />
+        </span>
+      ) : (
+        <Square size={12} strokeWidth={2} />
+      )}
+    </ControlBtn>
+  )
+
+  const closeBtn = (
+    <ControlBtn plain={plain} title="Close" onClick={onClose} danger>
+      <X size={15} strokeWidth={2} />
+    </ControlBtn>
+  )
+
+  if (plain) {
+    return (
+      <div
+        className={`app-no-drag pointer-events-auto flex shrink-0 items-center gap-0.5 ${className}`}
+        role="group"
+        aria-label="Window controls"
       >
-        {maximized ? (
-          <span className="relative block h-3.5 w-3.5">
-            <Square size={11} strokeWidth={2} className="absolute top-0 right-0" />
-            <Square size={11} strokeWidth={2} className="absolute bottom-0 left-0" />
-          </span>
-        ) : (
-          <Square size={12} strokeWidth={2} />
-        )}
-      </ControlBtn>
-      <ControlBtn title="Close" onClick={onClose} hover="hover:bg-rose-600 hover:text-white">
-        <X size={15} strokeWidth={2} />
-      </ControlBtn>
+        {minimizeBtn}
+        {maximizeBtn}
+        {closeBtn}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`app-toolbar app-no-drag pointer-events-auto shrink-0 ${className}`}
+      role="group"
+      aria-label="Window controls"
+    >
+      <div className="app-toolbar-item">{minimizeBtn}</div>
+      <div className="app-toolbar-item">{maximizeBtn}</div>
+      <div className="app-toolbar-item">{closeBtn}</div>
     </div>
   )
 }

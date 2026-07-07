@@ -29,8 +29,11 @@ extraResources:
   # brand icon used at runtime for window + system-tray (Windows .ico)
   - from: build/icon.ico
     to: icon.ico
+  - from: build/icon.png
+    to: icon.png
 win:
   icon: build/icon.ico
+  # winCodeSign extraction needs symlink privilege on Windows; embed icon via rcedit post-build instead.
   signAndEditExecutable: false
   target:
     - dir

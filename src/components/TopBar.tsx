@@ -21,7 +21,7 @@ export function TopBar() {
 
   return (
     <header
-      className={`relative flex h-16 shrink-0 items-center gap-4 border-b border-edge bg-panel2 pl-5 ${frameless ? 'select-none pr-2' : 'px-5'}`}
+      className={`relative z-20 flex h-16 shrink-0 items-center gap-3 overflow-visible border-b border-edge bg-panel2 ${frameless ? 'select-none px-4' : 'px-5'}`}
     >
       {frameless && <div className="app-drag absolute inset-0 z-0" onDoubleClick={onTitleBarDoubleClick} aria-hidden />}
 
@@ -41,16 +41,18 @@ export function TopBar() {
           <SearchBox className={interactive} />
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <div className={interactive}>
-            <DevTuneWebsiteButton />
-          </div>
-          <div className={interactive}>
-            <NotificationBell />
+        <div className={`flex shrink-0 items-center gap-3 ${interactive}`}>
+          <div className="app-toolbar">
+            <div className="app-toolbar-item">
+              <DevTuneWebsiteButton />
+            </div>
+            <div className="app-toolbar-item">
+              <NotificationBell />
+            </div>
           </div>
           <button
             onClick={() => navigate('/new')}
-            className={`press flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition-colors hover:bg-cyan-300 ${interactive}`}
+            className="press flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition-colors hover:bg-cyan-300"
           >
             New Project <Plus size={16} />
           </button>
@@ -58,7 +60,7 @@ export function TopBar() {
       </div>
 
       {frameless && (
-        <div className="relative z-10 shrink-0 pointer-events-none">
+        <div className="relative z-10 shrink-0 app-no-drag pointer-events-auto">
           <WindowControls />
         </div>
       )}

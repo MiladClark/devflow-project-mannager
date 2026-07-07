@@ -1,43 +1,67 @@
 /**
- * Build a multi-resolution Windows .ico for electron-builder exe embed + runtime tray.
- * Prefers roadmap-and-design/icon.png (512px); falls back to build/icon.png.
+ * Build multi-size build/icon.ico + build/icon.png from company assets:
+ *   roadmap-and-design/icon.ico                          (32×32)
+ *   roadmap-and-design/devtune-logo-gradient-blue-bg-white.ico (256×256)
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import decodeIco from 'decode-ico'
+import pngToIco from 'png-to-ico'
 import sharp from 'sharp'
-import toIco from 'to-ico'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const ico32 = path.join(root, 'roadmap-and-design', 'icon.ico')
+const ico256 = path.join(root, 'roadmap-and-design', 'devtune-logo-gradient-blue-bg-white.ico')
 const buildDir = path.join(root, 'build')
-const outPath = path.join(buildDir, 'icon.ico')
+const outIco = path.join(buildDir, 'icon.ico')
+const outPng = path.join(buildDir, 'icon.png')
 
-const pngCandidates = [
-  path.join(root, 'roadmap-and-design', 'icon.png'),
-  path.join(root, 'build', 'icon.png'),
-]
-
-const srcPng = pngCandidates.find((p) => existsSync(p))
-if (!srcPng) {
-  const fallbackIco = path.join(root, 'roadmap-and-design', 'icon.ico')
-  if (!existsSync(fallbackIco)) {
-    console.error('Missing icon source: add roadmap-and-design/icon.png or icon.ico')
-    process.exit(1)
-  }
-  mkdirSync(buildDir, { recursive: true })
-  writeFileSync(outPath, readFileSync(fallbackIco))
-  console.warn('Warning: using single-size icon.ico — add icon.png for best taskbar/exe icons')
-  process.exit(0)
+if (!existsSync(ico32)) {
+  console.error('Missing 32px icon:', ico32)
+  process.exit(1)
+}
+if (!existsSync(ico256)) {
+  console.error('Missing 256px icon:', ico256)
+  process.exit(1)
 }
 
-const sizes = [16, 32, 48, 256]
-const source = readFileSync(srcPng)
+/** @param {import('decode-ico').ImageData} img */
+async function imageDataToPng(img) {
+  if (img.type === 'png') {
+    return Buffer.from(img.data)
+  }
+  return sharp(Buffer.from(img.data), {
+    raw: { width: img.width, height: img.height, channels: 4 },
+  })
+    .png()
+    .toBuffer()
+}
+
+function pickSize(images, size) {
+  return images.find((img) => img.width === size) ?? images[0]
+}
+
+const png32src = await imageDataToPng(pickSize(decodeIco(readFileSync(ico32)), 32))
+const png256src = await imageDataToPng(pickSize(decodeIco(readFileSync(ico256)), 256))
+
+writeFileSync(outPng, png256src)
+
+// Windows taskbar / shell DPI ladder (Electron nativeImage docs)
+const sizes = [16, 20, 24, 32, 40, 48, 64, 256]
 const pngBuffers = await Promise.all(
-  sizes.map((size) => sharp(source).resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer()),
+  sizes.map((size) => {
+    if (size === 256) return png256src
+    if (size === 32) return png32src
+    return sharp(png32src)
+      .resize(size, size, { kernel: size <= 32 ? 'nearest' : 'lanczos3' })
+      .png()
+      .toBuffer()
+  }),
 )
 
 mkdirSync(buildDir, { recursive: true })
-writeFileSync(outPath, await toIco(pngBuffers))
-
-const meta = await sharp(srcPng).metadata()
-console.log(`Built ${outPath} (${sizes.join(', ')}px) from ${path.relative(root, srcPng)} (${meta.width}x${meta.height})`)
+writeFileSync(outIco, await pngToIco(pngBuffers))
+console.log(
+  `Prepared ${outIco} (${sizes.join(', ')}) and ${outPng} from icon.ico + devtune-logo-gradient-blue-bg-white.ico`,
+)

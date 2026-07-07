@@ -1,6 +1,5 @@
-import { app, BrowserWindow, nativeImage } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import path from 'node:path'
-import fs from 'node:fs'
 import { registerProjectHandlers } from './ipc/projects'
 import { registerRunnerHandlers, stopAll, onRuntimeChange } from './ipc/runner'
 import { registerScaffoldHandlers } from './ipc/scaffold'
@@ -22,6 +21,7 @@ import { stopProxy } from './lib/proxy'
 import { disposeAll as disposeAllTerminals } from './lib/terminal'
 import { applyLoginItemSettings, autoStartProjects } from './lib/autostart'
 import { createTray, refreshTrayMenu, destroyTray } from './lib/tray'
+import { loadBrandIcon } from './lib/icon'
 import { startNotifications, stopNotifications } from './lib/notify'
 import { checkForUpdates } from './lib/updates'
 import { isQuittingForUpdate } from './lib/updater'
@@ -54,21 +54,12 @@ if (!app.isPackaged && process.env.VITE_DEV_SERVER_URL) {
 
 const startHidden = process.argv.includes('--hidden')
 
-// DevFlow brand icon for the window title bar + taskbar (esp. in dev, where the
-// packaged exe icon isn't used). Packaged builds embed the icon via electron-builder.
-function brandIconPath(): string | null {
-  const candidates = [
-    path.join(app.getAppPath(), 'build', 'icon.ico'), // dev
-    path.join(process.resourcesPath ?? '', 'icon.ico'), // packaged (extraResources)
-  ]
-  return candidates.find((p) => fs.existsSync(p)) ?? null
-}
-
 /** Frameless custom title bar on Windows/Linux; native chrome on macOS. */
 const FRAMELESS = process.platform === 'win32' || process.platform === 'linux'
 
+// DevFlow brand icon for window title bar + taskbar.
 function createWindow() {
-  const icon = brandIconPath()
+  const brandIcon = loadBrandIcon()
   win = new BrowserWindow({
     width: 1480,
     height: 900,
@@ -79,7 +70,7 @@ function createWindow() {
     title: 'DevFlow Manager',
     show: !startHidden,
     frame: !FRAMELESS,
-    ...(icon ? { icon } : {}),
+    ...(brandIcon ? { icon: brandIcon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -90,9 +81,11 @@ function createWindow() {
   attachWindowStateEvents(win)
   attachLicenseFocusHandler(win)
 
-  if (icon) {
-    const image = nativeImage.createFromPath(icon)
-    if (!image.isEmpty()) win.setIcon(image)
+  if (brandIcon) {
+    win.setIcon(brandIcon)
+    win.once('ready-to-show', () => {
+      win?.setIcon(brandIcon)
+    })
   }
 
   if (process.env.VITE_DEV_SERVER_URL) {

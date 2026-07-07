@@ -21,7 +21,7 @@ import { stopProxy } from './lib/proxy'
 import { disposeAll as disposeAllTerminals } from './lib/terminal'
 import { applyLoginItemSettings, autoStartProjects } from './lib/autostart'
 import { createTray, refreshTrayMenu, destroyTray } from './lib/tray'
-import { loadBrandIcon } from './lib/icon'
+import { loadBrandIcon, resolveBrandIconPath } from './lib/icon'
 import { startNotifications, stopNotifications } from './lib/notify'
 import { checkForUpdates } from './lib/updates'
 import { isQuittingForUpdate } from './lib/updater'
@@ -44,8 +44,10 @@ if (!gotSingleInstanceLock) {
   })
 }
 
-// required for Windows toast notifications in packaged builds
-app.setAppUserModelId('com.devflow.manager')
+// required for Windows toast notifications in packaged builds.
+// NOTE: distinct from any older installed build's id so the Windows taskbar
+// resolves THIS app's own window icon instead of a stale cached AUMID icon.
+app.setAppUserModelId('com.devtune.devflowmanager')
 
 // dev-only: allow driving the app over CDP for integration checks
 if (!app.isPackaged && process.env.VITE_DEV_SERVER_URL) {
@@ -60,6 +62,9 @@ const FRAMELESS = process.platform === 'win32' || process.platform === 'linux'
 // DevFlow brand icon for window title bar + taskbar.
 function createWindow() {
   const brandIcon = loadBrandIcon()
+  // On Windows, passing the .ico PATH lets the OS pick the right multi-res frame
+  // for the taskbar; the nativeImage is used as a fallback for setIcon().
+  const brandIconPath = resolveBrandIconPath()
   win = new BrowserWindow({
     width: 1480,
     height: 900,
@@ -70,7 +75,7 @@ function createWindow() {
     title: 'DevFlow Manager',
     show: !startHidden,
     frame: !FRAMELESS,
-    ...(brandIcon ? { icon: brandIcon } : {}),
+    ...(brandIconPath ? { icon: brandIconPath } : brandIcon ? { icon: brandIcon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

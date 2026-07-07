@@ -17,13 +17,15 @@ function ControlBtn({
   plain?: boolean
 }) {
   if (plain) {
+    // Same square hover as the dashboard toolbar buttons, but with no header
+    // bar / container background — just floating controls (login + update pages).
     return (
       <button
         type="button"
         title={title}
         onClick={onClick}
-        className={`app-no-drag flex h-8 w-9 items-center justify-center rounded-md text-slate-400 transition-colors ${
-          danger ? 'hover:bg-rose-600 hover:text-white' : 'hover:bg-slate-800/80 hover:text-slate-200'
+        className={`app-no-drag flex h-9 w-9 items-center justify-center text-slate-400 transition-colors duration-200 ${
+          danger ? 'hover:bg-rose-600 hover:text-white' : 'hover:bg-slate-800/60 hover:text-slate-200'
         }`}
       >
         {children}
@@ -112,7 +114,7 @@ export function WindowControls({
   if (plain) {
     return (
       <div
-        className={`app-no-drag pointer-events-auto flex shrink-0 items-center gap-0.5 ${className}`}
+        className={`app-no-drag pointer-events-auto flex shrink-0 items-center gap-0 ${className}`}
         role="group"
         aria-label="Window controls"
       >

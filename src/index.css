@@ -1,12 +1,20 @@
 @import "tailwindcss";
 
-/* Bundled modern UI font (self-hosted → CSP-safe, works offline) */
+/* Bundled UI fonts (self-hosted → CSP-safe, offline). Selected via the
+   Appearance → Fonts picker, applied through the --app-font variable. */
 @font-face {
   font-family: "Inter Variable";
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
   src: url("./assets/fonts/InterVariable.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/GeistVariable.woff2") format("woff2");
 }
 
 @theme {
@@ -155,9 +163,9 @@ html[data-theme="granite"][data-mode="light"] {
   --color-cyan-300: #64748b;
 }
 
-/* liquid glass — translucent frosted "Acrylic" surfaces, Windows-tuned
-   (surfaces are semi-transparent; the .glass material rule below blurs them) */
-html[data-theme="glass"] {
+/* Clark Floor — translucent frosted surfaces over a painted aurora background
+   (surfaces are semi-transparent; the material rule below blurs the painted bg) */
+html[data-theme="clarkfloor"] {
   --color-bg: #070c18;
   --color-panel: rgba(30, 43, 71, 0.52);
   --color-panel2: rgba(20, 31, 55, 0.44);
@@ -165,7 +173,7 @@ html[data-theme="glass"] {
   --color-accent: #4cc9ff;
   --color-cyan-300: #93dbff;
 }
-html[data-theme="glass"][data-mode="light"] {
+html[data-theme="clarkfloor"][data-mode="light"] {
   --color-bg: #d9e2f0;
   --color-panel: rgba(255, 255, 255, 0.55);
   --color-panel2: rgba(255, 255, 255, 0.40);
@@ -174,10 +182,10 @@ html[data-theme="glass"][data-mode="light"] {
   --color-cyan-300: #2aa8e8;
 }
 
-/* ---------- Liquid Glass material ---------- */
+/* ---------- Clark Floor material ---------- */
 
 /* aurora/mesh page background gives the frosted panels real depth to blur */
-html[data-theme="glass"] body {
+html[data-theme="clarkfloor"] body {
   background-image:
     radial-gradient(1100px 640px at 8% 0%, rgba(76, 201, 255, 0.22), transparent 60%),
     radial-gradient(1000px 660px at 94% 4%, rgba(139, 122, 255, 0.20), transparent 60%),
@@ -185,7 +193,7 @@ html[data-theme="glass"] body {
     radial-gradient(760px 540px at 28% 72%, rgba(56, 130, 246, 0.14), transparent 60%);
   background-attachment: fixed;
 }
-html[data-theme="glass"][data-mode="light"] body {
+html[data-theme="clarkfloor"][data-mode="light"] body {
   background-image:
     radial-gradient(1100px 640px at 8% 0%, rgba(56, 160, 220, 0.30), transparent 60%),
     radial-gradient(1000px 660px at 94% 4%, rgba(150, 130, 240, 0.26), transparent 60%),
@@ -195,7 +203,7 @@ html[data-theme="glass"][data-mode="light"] body {
 /* Frost every panel surface + give it a light top edge and soft drop shadow.
    The -webkit- prefix is kept outside @supports; the *standard* backdrop-filter
    must live inside @supports or Tailwind v4's Lightning CSS strips it. */
-html[data-theme="glass"] [class*="bg-panel"] {
+html[data-theme="clarkfloor"] [class*="bg-panel"] {
   -webkit-backdrop-filter: blur(20px) saturate(175%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
@@ -203,17 +211,17 @@ html[data-theme="glass"] [class*="bg-panel"] {
     0 10px 34px -14px rgba(0, 0, 0, 0.55);
 }
 @supports (backdrop-filter: blur(1px)) {
-  html[data-theme="glass"] [class*="bg-panel"] {
+  html[data-theme="clarkfloor"] [class*="bg-panel"] {
     backdrop-filter: blur(20px) saturate(175%);
   }
 }
-html[data-theme="glass"][data-mode="light"] [class*="bg-panel"] {
+html[data-theme="clarkfloor"][data-mode="light"] [class*="bg-panel"] {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.75),
     0 10px 30px -16px rgba(20, 40, 80, 0.28);
 }
 /* frosted controls (accent pills stay solid for contrast) */
-html[data-theme="glass"] .app-toolbar {
+html[data-theme="clarkfloor"] .app-toolbar {
   border-color: var(--color-edge);
 }
 
@@ -225,13 +233,15 @@ body,
 
 body {
   @apply bg-bg text-slate-200 antialiased;
-  font-family: "Inter Variable", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  /* Inter stylistic sets: single-story a/g, tidier punctuation — a cleaner, modern look */
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
-  letter-spacing: -0.011em;
+  font-family: var(--app-font, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif);
   overscroll-behavior: none;
   user-select: none;
   -webkit-user-select: none;
+}
+/* Inter looks best with its stylistic sets + a touch of negative tracking */
+html[data-font="inter"] body {
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  letter-spacing: -0.011em;
 }
 
 /* Copy-friendly surfaces — opt in with .select-text where needed */

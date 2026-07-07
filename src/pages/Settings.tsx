@@ -5,6 +5,7 @@ import { notify } from '../state/notifications'
 import { confirmAction } from '../state/confirm'
 import { api, isElectron } from '../lib/ipc'
 import { THEMES, applyTheme, getThemeChoice, type ThemeMode } from '../lib/theme'
+import { FONTS, applyFont, getFontId } from '../lib/font'
 import { Switch, SwitchField } from '../components/Switch'
 import type { PreferredEditor, PreferredNodeManager, ProxySetupStatus } from '../shared/types'
 
@@ -359,10 +360,15 @@ function BackupSection() {
 
 function AppearanceSection() {
   const [choice, setChoice] = useState(getThemeChoice)
+  const [fontId, setFontId] = useState(getFontId)
 
   useEffect(() => {
     applyTheme(choice)
   }, [choice])
+
+  useEffect(() => {
+    applyFont(fontId)
+  }, [fontId])
 
   function update(patch: Partial<typeof choice>) {
     setChoice((prev) => ({ ...prev, ...patch }))
@@ -371,7 +377,7 @@ function AppearanceSection() {
   return (
     <SettingsSection
       title="Appearance"
-      description="Pick a color theme and mode — applied instantly across the whole app."
+      description="Pick a color theme, mode, and font — applied instantly across the whole app."
     >
       <SettingsSubsection title="Mode">
         <div className="flex items-center gap-2">
@@ -418,6 +424,41 @@ function AppearanceSection() {
                   )}
                 </span>
                 <span className={`text-xs font-medium ${active ? 'text-white' : 'text-slate-400'}`}>{t.name}</span>
+              </button>
+            )
+          })}
+        </div>
+      </SettingsSubsection>
+
+      <SettingsDivider />
+
+      <SettingsSubsection title="Font">
+        <div className="grid grid-cols-3 gap-3">
+          {FONTS.map((f) => {
+            const active = fontId === f.id
+            return (
+              <button
+                key={f.id}
+                onClick={() => setFontId(f.id)}
+                className={`relative flex flex-col gap-1 rounded-xl border p-4 text-left transition-colors ${
+                  active ? 'border-accent bg-accent/5' : 'border-edge bg-bg hover:border-slate-600'
+                }`}
+              >
+                <span className="text-2xl leading-none text-white" style={{ fontFamily: f.stack }}>
+                  Ag
+                </span>
+                <span
+                  className={`mt-1.5 text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`}
+                  style={{ fontFamily: f.stack }}
+                >
+                  {f.name}
+                </span>
+                <span className="text-[11px] text-slate-500">{f.hint}</span>
+                {active && (
+                  <span className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-accent-fg">
+                    <Check size={11} strokeWidth={3} />
+                  </span>
+                )}
               </button>
             )
           })}

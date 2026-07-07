@@ -15,7 +15,7 @@ export const THEMES: ThemeDef[] = [
   { id: 'sunset', name: 'Sunset', accent: { dark: '#fb923c', light: '#ea580c' }, surface: { dark: '#171007', light: '#faf4ec' } },
   { id: 'rose', name: 'Rose', accent: { dark: '#fb7185', light: '#e11d48' }, surface: { dark: '#170b10', light: '#faf0f3' } },
   { id: 'granite', name: 'Graphite', accent: { dark: '#9db2d6', light: '#475569' }, surface: { dark: '#0d0e12', light: '#e9eaee' } },
-  { id: 'glass', name: 'Liquid Glass', accent: { dark: '#4cc9ff', light: '#0e8fd6' }, surface: { dark: '#132038', light: '#d9e2f0' } },
+  { id: 'clarkfloor', name: 'Clark Floor', accent: { dark: '#4cc9ff', light: '#0e8fd6' }, surface: { dark: '#132038', light: '#d9e2f0' } },
 ]
 
 const STORAGE_KEY = 'devflow-theme'

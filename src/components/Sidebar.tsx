@@ -88,11 +88,7 @@ export function Sidebar() {
                 key={to}
                 to={to}
                 end={to === '/'}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    isActive ? 'bg-slate-700/60 text-white' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
-                  }`
-                }
+                className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
               >
                 <Icon size={17} />
                 {label}

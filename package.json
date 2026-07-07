@@ -1,7 +1,7 @@
 {
   "name": "devflow-manager",
   "productName": "DevFlow Manager",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Windows desktop app to create, run, monitor and configure local dev projects",
   "private": true,
   "main": "dist-electron/main.js",

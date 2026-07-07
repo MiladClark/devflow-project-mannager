@@ -11,8 +11,8 @@ import pngToIco from 'png-to-ico'
 import sharp from 'sharp'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const ico32 = path.join(root, 'roadmap-and-design', 'icon.ico')
-const ico256 = path.join(root, 'roadmap-and-design', 'devtune-logo-gradient-blue-bg-white.ico')
+const ico32 = path.join(root, 'build', 'icon.ico')
+const ico256 = path.join(root, 'build', 'devtune-logo-gradient-blue-bg-white.ico')
 const buildDir = path.join(root, 'build')
 const outIco = path.join(buildDir, 'icon.ico')
 const outPng = path.join(buildDir, 'icon.png')

@@ -14,8 +14,8 @@ export const DEFAULT_SERVER_URL = process.env.DEVTUNE_URL ?? 'https://devtune.ap
 
 // Legacy backend hosts that should be migrated to the live domain on load.
 const LEGACY_SERVER_URLS = [
-  'https://devtune-website.vercel.app',
-  'http://devtune-website.vercel.app',
+  'https://devtune.app',
+  'http://devtune.app',
 ]
 
 // Ed25519 public key matching the DevTune licensing service (LICENSE_PUBLIC_KEY)

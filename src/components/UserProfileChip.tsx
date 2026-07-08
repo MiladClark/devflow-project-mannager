@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Crown, Loader2, ShieldAlert, ShieldCheck, Sparkles, User } from 'lucide-react'
 import { api } from '../lib/ipc'
+import { useGuestLock } from '../lib/guest'
 import { Skeleton } from './Skeleton'
 import type { LicenseState } from '../shared/types'
 
@@ -14,6 +15,16 @@ type ChipVisual = {
 }
 
 function chipVisual(state: LicenseState | null): ChipVisual {
+  if (state?.guestMode && !state.signedIn) {
+    return {
+      title: 'Guest',
+      subtitle: 'Sign in to unlock',
+      icon: User,
+      iconWrap: 'bg-amber-500/15 text-amber-300',
+      hover: 'hover:bg-amber-500/5',
+    }
+  }
+
   if (!state?.signedIn) {
     return {
       title: 'Sign in',
@@ -79,6 +90,7 @@ export function UserProfileChip() {
   const [state, setState] = useState<LicenseState | null>(null)
   const [ready, setReady] = useState(false)
   const navigate = useNavigate()
+  const { guardGuest } = useGuestLock()
 
   useEffect(() => {
     let cancelled = false
@@ -106,7 +118,10 @@ export function UserProfileChip() {
   return (
     <button
       type="button"
-      onClick={() => navigate('/account')}
+      onClick={() => {
+        if (guardGuest()) return
+        navigate('/account')
+      }}
       className={`press flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition-colors ${v.hover}`}
       title="Account & license"
     >

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { AreaChart, Area, ResponsiveContainer } from 'recharts'
 import { CheckCircle2, Info, AlertTriangle, XCircle, ArrowUpRight } from 'lucide-react'
 import { useApp } from '../state/store'
+import { useGuestLock } from '../lib/guest'
 import { formatBytes, timeAgo } from '../lib/format'
 import { SkeletonRightRail } from './Skeleton'
 import type { ActivityEvent } from '../shared/types'
@@ -14,6 +15,7 @@ const levelIcon: Record<ActivityEvent['level'], { icon: typeof Info; cls: string
 }
 
 export function RightRail() {
+  const { guardGuest } = useGuestLock()
   const { activity, systemStats, systemHistory, projects, loaded } = useApp()
   const memPct = systemStats ? (systemStats.memUsed / systemStats.memTotal) * 100 : 0
 
@@ -57,6 +59,7 @@ export function RightRail() {
             <h3 className="text-xs font-semibold tracking-wider text-slate-500 uppercase">System Health</h3>
             <Link
               to="/system"
+              onClick={(e) => guardGuest(e)}
               className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline"
             >
               View system <ArrowUpRight size={12} />

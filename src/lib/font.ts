@@ -10,13 +10,14 @@ export interface FontDef {
 const SYSTEM_FALLBACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif'
 
 export const FONTS: FontDef[] = [
+  { id: 'poppins', name: 'Poppins', hint: 'Rounded & friendly', stack: `"Poppins", ${SYSTEM_FALLBACK}` },
   { id: 'system', name: 'System', hint: 'Segoe UI · native', stack: SYSTEM_FALLBACK },
   { id: 'inter', name: 'Inter', hint: 'Clean & neutral', stack: `"Inter Variable", ${SYSTEM_FALLBACK}` },
   { id: 'geist', name: 'Geist', hint: 'Modern geometric', stack: `"Geist Variable", ${SYSTEM_FALLBACK}` },
 ]
 
 const STORAGE_KEY = 'devflow-font'
-const DEFAULT_FONT = 'system'
+const DEFAULT_FONT = 'poppins'
 
 export function getFontId(): string {
   try {

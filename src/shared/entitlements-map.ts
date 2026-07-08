@@ -24,6 +24,19 @@ export const FREE_LIMITS: EnforcedEntitlements = {
   betaChannel: false,
 }
 
+/** Signed-out browse mode — UI visible, all actions blocked until sign-in. */
+export const GUEST_LIMITS: EnforcedEntitlements = {
+  plan: 'guest',
+  maxProjects: 0,
+  premiumTemplates: false,
+  healthAudit: false,
+  maxTerminalSessions: 0,
+  unlimitedTerminals: false,
+  autoStartProjects: false,
+  cloudBackup: false,
+  betaChannel: false,
+}
+
 function parseTerminalSessions(raw: string | undefined): { max: number; unlimited: boolean } {
   if (!raw || raw === 'false' || raw === '0') return { max: 1, unlimited: false }
   if (raw === 'unlimited') return { max: Number.POSITIVE_INFINITY, unlimited: true }

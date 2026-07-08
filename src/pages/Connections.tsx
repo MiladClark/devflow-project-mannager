@@ -629,41 +629,43 @@ export function Connections() {
               </PageSection>
               </div>
 
-              <div className="sticky bottom-0 w-full border-t border-edge bg-panel2/95 py-4 backdrop-blur-sm">
-                <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2 px-6">
-                  <button
-                    onClick={test}
-                    disabled={testing || !draft.host || !draft.port}
-                    className="flex items-center gap-2 rounded-lg border border-edge px-4 py-2.5 text-sm font-medium text-slate-200 hover:border-accent/50 disabled:opacity-40"
-                  >
-                    {testing ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
-                    Test connection
-                  </button>
-                  <button
-                    onClick={save}
-                    className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg hover:bg-cyan-300"
-                  >
-                    <Save size={15} /> Save
-                  </button>
-                  <button
-                    onClick={apply}
-                    disabled={!draft.projectId}
-                    title={
-                      draft.projectId
-                        ? `Write ${draft.envVarName} to ${attachedProject?.name}/${draft.envFile}`
-                        : 'Attach a project first'
-                    }
-                    className="flex items-center gap-2 rounded-lg bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-40"
-                  >
-                    <FileCog size={15} /> Apply to project
-                  </button>
-                  {savedMsg && <span className="text-sm text-emerald-400">Saved.</span>}
-                  <button
-                    onClick={remove}
-                    className="ml-auto flex items-center gap-2 rounded-lg border border-edge px-3 py-2.5 text-sm text-slate-500 hover:border-rose-500/50 hover:text-rose-400"
-                  >
-                    <Trash2 size={15} /> Delete
-                  </button>
+              <div className="sticky bottom-0 z-10 w-full">
+                <div className="app-frost-popover border-t border-edge py-4">
+                  <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2 px-6">
+                    <button
+                      onClick={test}
+                      disabled={testing || !draft.host || !draft.port}
+                      className="flex items-center gap-2 rounded-lg border border-edge px-4 py-2.5 text-sm font-medium text-slate-200 hover:border-accent/50 disabled:opacity-40"
+                    >
+                      {testing ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
+                      Test connection
+                    </button>
+                    <button
+                      onClick={save}
+                      className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-fg hover:bg-cyan-300"
+                    >
+                      <Save size={15} /> Save
+                    </button>
+                    <button
+                      onClick={apply}
+                      disabled={!draft.projectId}
+                      title={
+                        draft.projectId
+                          ? `Write ${draft.envVarName} to ${attachedProject?.name}/${draft.envFile}`
+                          : 'Attach a project first'
+                      }
+                      className="flex items-center gap-2 rounded-lg bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-40"
+                    >
+                      <FileCog size={15} /> Apply to project
+                    </button>
+                    {savedMsg && <span className="text-sm text-emerald-400">Saved.</span>}
+                    <button
+                      onClick={remove}
+                      className="ml-auto flex items-center gap-2 rounded-lg border border-edge px-3 py-2.5 text-sm text-slate-500 hover:border-rose-500/50 hover:text-rose-400"
+                    >
+                      <Trash2 size={15} /> Delete
+                    </button>
+                  </div>
                 </div>
               </div>
             </>

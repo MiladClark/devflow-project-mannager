@@ -21,16 +21,25 @@ import { UpdateRoot } from './components/UpdateRoot'
 import { CommandPalette } from './components/CommandPalette'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Toaster } from './components/Toaster'
+import { GuestBanner } from './components/GuestBanner'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { PAGES } from './lib/nav'
 import { api } from './lib/ipc'
+import { useGuestLock } from './lib/guest'
 
 function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { isGuest, returnToSignIn, guardGuest } = useGuestLock()
   const showRail = location.pathname === '/' || location.pathname === '/projects'
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+
+  useEffect(() => {
+    if (isGuest && location.pathname !== '/') {
+      void returnToSignIn()
+    }
+  }, [isGuest, location.pathname, returnToSignIn])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -44,6 +53,7 @@ function Layout() {
 
       if ((e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'k') || (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'p')) {
         e.preventDefault()
+        if (guardGuest()) return
         setHelpOpen(false)
         setPaletteOpen((o) => !o)
         return
@@ -51,11 +61,13 @@ function Layout() {
       if (inEditable) return
       if (e.ctrlKey && e.key === '/') {
         e.preventDefault()
+        if (guardGuest()) return
         setPaletteOpen(false)
         setHelpOpen((o) => !o)
         return
       }
       if (e.ctrlKey && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
+        if (guardGuest()) return
         const page = PAGES[Number(e.key) - 1]
         if (page) {
           e.preventDefault()
@@ -65,15 +77,25 @@ function Layout() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [navigate])
+  }, [navigate, guardGuest])
 
   // navigation pushed from the main process (tray menu, notification clicks)
-  useEffect(() => api.onNavigate((route) => navigate(route)), [navigate])
+  useEffect(() => {
+    const off = api.onNavigate((route) => {
+      if (isGuest && route !== '/') {
+        void returnToSignIn()
+        return
+      }
+      navigate(route)
+    })
+    return off
+  }, [navigate, isGuest, returnToSignIn])
 
   return (
     <div className="flex h-full flex-col">
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <GuestBanner />
       <TopBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />

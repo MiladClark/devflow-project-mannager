@@ -4,6 +4,7 @@ import { Search, Wrench, CornerDownLeft, X } from 'lucide-react'
 import { useApp } from '../state/store'
 import { TOOLS } from '../shared/tools'
 import { PAGES } from '../lib/nav'
+import { useGuestLock } from '../lib/guest'
 import { FrameworkIcon } from './FrameworkIcon'
 
 interface Hit {
@@ -32,6 +33,7 @@ function highlightMatch(text: string, query: string) {
 
 export function SearchBox({ className }: { className?: string }) {
   const navigate = useNavigate()
+  const { guardGuest } = useGuestLock()
   const { search, setSearch, projects } = useApp()
   const [open, setOpen] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -112,6 +114,7 @@ export function SearchBox({ className }: { className?: string }) {
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable || target.closest('.xterm')) return
       e.preventDefault()
+      if (guardGuest()) return
       inputRef.current?.focus()
       setOpen(true)
     }
@@ -120,6 +123,7 @@ export function SearchBox({ className }: { className?: string }) {
   }, [])
 
   function go(hit: Hit) {
+    if (guardGuest()) return
     setOpen(false)
     setSearch('')
     inputRef.current?.blur()
@@ -162,7 +166,7 @@ export function SearchBox({ className }: { className?: string }) {
   return (
     <div ref={ref} className={`relative mx-auto w-full max-w-sm ${className ?? ''}`}>
       <div
-        className={`group flex h-9 items-center gap-2 rounded-xl border bg-panel2/60 px-2.5 transition-all ${
+        className={`app-frost-control group flex h-9 items-center gap-2 rounded-xl border px-2.5 transition-all ${
           focused
             ? 'border-accent/50 ring-2 ring-accent/15'
             : 'border-edge hover:border-accent/35'
@@ -181,6 +185,7 @@ export function SearchBox({ className }: { className?: string }) {
             setOpen(true)
           }}
           onFocus={() => {
+            if (guardGuest()) return
             setFocused(true)
             setOpen(true)
           }}
@@ -206,7 +211,7 @@ export function SearchBox({ className }: { className?: string }) {
       </div>
 
       {showPanel && (
-        <div className="animate-pop-in absolute top-[calc(100%+6px)] right-0 left-0 z-50 overflow-hidden rounded-xl border border-edge bg-panel/95 shadow-2xl backdrop-blur-sm">
+        <div className="app-frost-popover animate-pop-in absolute top-[calc(100%+6px)] right-0 left-0 z-50 overflow-hidden rounded-xl border border-edge shadow-2xl">
           <div className="max-h-80 overflow-y-auto p-1.5">
             {!q && (
               <p className="px-3 pt-1.5 pb-2 text-[11px] text-slate-500">Quick access — or type to filter</p>

@@ -6,7 +6,7 @@ import type { ScaffoldOptions, ScaffoldResult } from '../../src/shared/types'
 import { normalizePlugins, type ScaffoldPluginId } from '../../src/shared/scaffoldPlugins'
 import { store } from '../lib/store'
 import { importProjectFromPath } from './projects'
-import { getEnforcedEntitlements } from '../lib/licensing'
+import { getEnforcedEntitlements, isGuestAccess, GUEST_ACTION_ERROR } from '../lib/licensing'
 
 function broadcast(channel: string, ...args: unknown[]) {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, ...args)
@@ -296,6 +296,7 @@ async function applyPlugins(projectDir: string, opts: ScaffoldOptions): Promise<
 }
 
 async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
+  if (isGuestAccess()) return { ok: false, error: GUEST_ACTION_ERROR }
   const limits = getEnforcedEntitlements()
   if (store.getProjects().length >= limits.maxProjects) {
     return {

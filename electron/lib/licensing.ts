@@ -5,7 +5,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { execFile } from 'node:child_process'
 import type { LicenseState, ActivateOptions, LicenseActionResult } from '../../src/shared/types'
-import { FREE_LIMITS, mapEntitlements, type EnforcedEntitlements } from '../../src/shared/entitlements-map'
+import { FREE_LIMITS, GUEST_LIMITS, mapEntitlements, type EnforcedEntitlements } from '../../src/shared/entitlements-map'
 import { runOAuthLoopback } from './oauth-loopback'
 
 export { FREE_LIMITS, type EnforcedEntitlements }
@@ -26,6 +26,7 @@ interface PersistedLicense {
   avatarUrl?: string
   deviceId?: string
   signedIn?: boolean
+  guestMode?: boolean
   seatsUsed?: number
   token?: string
   lastValidatedAt?: number
@@ -145,6 +146,7 @@ export function getLicenseState(): LicenseState {
     valid: false,
     inGrace: false,
     signedIn: !!st.signedIn,
+    guestMode: !!st.guestMode && !st.signedIn,
     serverUrl: st.serverUrl,
     appVersion: app.getVersion(),
     deviceLabel: os.hostname(),
@@ -329,6 +331,7 @@ export async function completeOAuthExchange(code: string, state: string): Promis
     }
 
     st.signedIn = true
+    st.guestMode = undefined
     st.userName = json.user?.name
     st.email = json.user?.email
     st.avatarUrl = json.user?.avatar_url ?? undefined
@@ -392,6 +395,7 @@ export function clearLicense(): LicenseState {
   st.avatarUrl = undefined
   st.deviceId = undefined
   st.signedIn = undefined
+  st.guestMode = undefined
   st.seatsUsed = undefined
   st.lastValidatedAt = undefined
   save()
@@ -431,7 +435,31 @@ export async function refreshIfDue(): Promise<void> {
   await refresh().catch(() => {})
 }
 
+export function isGuestAccess(): boolean {
+  const st = load()
+  return !!st.guestMode && !st.signedIn
+}
+
+export const GUEST_ACTION_ERROR = 'Sign in with DevTune to unlock this feature.'
+
+export function enterGuestMode(): LicenseState {
+  const st = load()
+  st.guestMode = true
+  st.token = undefined
+  st.licenseKey = undefined
+  st.email = undefined
+  st.userName = undefined
+  st.avatarUrl = undefined
+  st.deviceId = undefined
+  st.signedIn = undefined
+  st.seatsUsed = undefined
+  st.lastValidatedAt = undefined
+  save()
+  return broadcastLicenseChanged()
+}
+
 export function getEnforcedEntitlements(): EnforcedEntitlements {
+  if (isGuestAccess()) return GUEST_LIMITS
   const s = getLicenseState()
   if (!s.valid) return FREE_LIMITS
   return mapEntitlements(s.entitlements, s.plan ?? s.tier ?? 'pro')

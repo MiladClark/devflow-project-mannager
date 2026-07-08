@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Globe } from 'lucide-react'
 import { api } from '../lib/ipc'
+import { useGuestLock } from '../lib/guest'
 
 export function DevTuneWebsiteButton() {
+  const { guardGuest } = useGuestLock()
   const [url, setUrl] = useState('https://devtune-website.vercel.app')
 
   useEffect(() => {
@@ -18,7 +20,10 @@ export function DevTuneWebsiteButton() {
   return (
     <button
       type="button"
-      onClick={() => api.openExternal(url)}
+      onClick={() => {
+        if (guardGuest()) return
+        void api.openExternal(url)
+      }}
       title="Open DevTune website"
       className="app-toolbar-btn"
     >

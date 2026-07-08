@@ -5,6 +5,7 @@ import path from 'node:path'
 import type { BulkResult, LogLine, Project, RuntimeInfo, StartResult, RunActionResult } from '../../src/shared/types'
 import { store } from '../lib/store'
 import { broadcast, activity } from '../lib/broadcast'
+import { isGuestAccess, GUEST_ACTION_ERROR } from '../lib/licensing'
 import { isPortFree } from '../lib/ports'
 import { getPortOwner } from '../lib/portOwner'
 import { preflight, resolvePackageManager, pmInstall } from '../lib/pkgmanager'
@@ -111,6 +112,7 @@ function killTree(pid: number): Promise<void> {
 }
 
 export async function startProject(projectId: string): Promise<StartResult> {
+  if (isGuestAccess()) return { ok: false, error: GUEST_ACTION_ERROR }
   const p = store.getProject(projectId)
   if (!p) return { ok: false, error: 'Project not found' }
   if (procs.has(projectId)) return { ok: false, error: 'Project is already running' }
@@ -229,6 +231,7 @@ async function stopProject(projectId: string): Promise<{ ok: boolean; error?: st
 }
 
 async function buildProject(projectId: string): Promise<RunActionResult> {
+  if (isGuestAccess()) return { ok: false, error: GUEST_ACTION_ERROR }
   const p = store.getProject(projectId)
   if (!p) return { ok: false, error: 'Project not found' }
   if (procs.has(projectId)) return { ok: false, error: 'Stop the dev server before building' }
@@ -279,6 +282,7 @@ async function buildProject(projectId: string): Promise<RunActionResult> {
 
 /** Run `<pm> install` for a project, streaming output to its log. */
 async function installDeps(projectId: string): Promise<{ ok: boolean; error?: string }> {
+  if (isGuestAccess()) return { ok: false, error: GUEST_ACTION_ERROR }
   const p = store.getProject(projectId)
   if (!p) return { ok: false, error: 'Project not found' }
   if (procs.has(projectId)) return { ok: false, error: 'Stop the running process first' }
@@ -338,6 +342,7 @@ export async function stopAll() {
 }
 
 async function runScript(projectId: string, scriptName: string): Promise<RunActionResult> {
+  if (isGuestAccess()) return { ok: false, error: GUEST_ACTION_ERROR }
   const p = store.getProject(projectId)
   if (!p) return { ok: false, error: 'Project not found' }
   const cmd = scriptCommand(p.path, scriptName)

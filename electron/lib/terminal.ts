@@ -4,7 +4,7 @@ import crypto from 'node:crypto'
 import type { IPty } from 'node-pty'
 import type { TermSessionInfo, TermShell } from '../../src/shared/types'
 import { broadcast } from './broadcast'
-import { getEnforcedEntitlements } from './licensing'
+import { getEnforcedEntitlements, isGuestAccess, GUEST_ACTION_ERROR } from './licensing'
 
 const MAX_BUFFER = 200 * 1024 // rolling scrollback kept in main for reattach
 
@@ -47,6 +47,7 @@ export async function createSession(opts: {
   cols: number
   rows: number
 }): Promise<{ ok: boolean; sessionId?: string; error?: string }> {
+  if (isGuestAccess()) return { ok: false, error: GUEST_ACTION_ERROR }
   const limits = getEnforcedEntitlements()
   if (!limits.unlimitedTerminals && sessions.size >= limits.maxTerminalSessions) {
     return { ok: false, error: 'free_limit' }

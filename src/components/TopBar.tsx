@@ -6,11 +6,18 @@ import { NotificationBell } from './NotificationBell'
 import { DevTuneWebsiteButton } from './DevTuneWebsiteButton'
 import { WindowControls } from './WindowControls'
 import { api } from '../lib/ipc'
+import { useGuestLock } from '../lib/guest'
+import { useEntitlements } from '../lib/entitlements'
+import { useApp } from '../state/store'
 import logoBlue from '../assets/logo-blue.svg'
 
 export function TopBar() {
   const navigate = useNavigate()
+  const { guardGuest } = useGuestLock()
   const frameless = !!api.frameless
+  const entitlements = useEntitlements()
+  const projects = useApp((s) => s.projects)
+  const limitReached = entitlements.loaded && projects.length >= entitlements.maxProjects
 
   async function onTitleBarDoubleClick() {
     if (!frameless || !api.windowToggleMaximize) return
@@ -42,7 +49,7 @@ export function TopBar() {
         </div>
 
         <div className={`flex shrink-0 items-center gap-3 ${interactive}`}>
-          <div className="app-toolbar">
+          <div className="app-toolbar app-frost-control">
             <div className="app-toolbar-item">
               <DevTuneWebsiteButton />
             </div>
@@ -51,8 +58,13 @@ export function TopBar() {
             </div>
           </div>
           <button
-            onClick={() => navigate('/new')}
-            className="press flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition-colors hover:bg-cyan-300"
+            onClick={() => {
+              if (guardGuest()) return
+              navigate('/new')
+            }}
+            disabled={limitReached}
+            title={limitReached ? `Free plan project limit reached (${entitlements.maxProjects}) — upgrade to create more` : undefined}
+            className="press flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition-colors hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-accent"
           >
             New Project <Plus size={16} />
           </button>

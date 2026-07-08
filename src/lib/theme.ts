@@ -25,7 +25,7 @@ export interface ThemeChoice {
   mode: ThemeMode
 }
 
-const DEFAULT: ThemeChoice = { theme: 'ocean', mode: 'dark' }
+const DEFAULT: ThemeChoice = { theme: 'clarkfloor', mode: 'light' }
 
 export function getThemeChoice(): ThemeChoice {
   try {

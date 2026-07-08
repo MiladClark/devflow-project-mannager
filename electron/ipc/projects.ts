@@ -5,7 +5,7 @@ import { store } from '../lib/store'
 import { detectProject } from '../lib/detect'
 import { checkPort } from '../lib/ports'
 import { getPortOwner, takeoverPort } from '../lib/portOwner'
-import { getEnforcedEntitlements } from '../lib/licensing'
+import { getEnforcedEntitlements, isGuestAccess, GUEST_ACTION_ERROR } from '../lib/licensing'
 import { applyLoginItemSettings } from '../lib/autostart'
 import { openInEditor, detectEditors } from '../lib/editor'
 import { scanForProjects } from '../lib/scanProjects'
@@ -37,6 +37,7 @@ export function registerProjectHandlers() {
   ipcMain.handle('projects:list', () => store.getProjects())
 
   ipcMain.handle('projects:import', async (e) => {
+    if (isGuestAccess()) return { ok: false, error: GUEST_ACTION_ERROR }
     const limits = getEnforcedEntitlements()
     if (store.getProjects().length >= limits.maxProjects) {
       return {
@@ -102,6 +103,7 @@ export function registerProjectHandlers() {
   })
 
   ipcMain.handle('projects:importMany', (_e, paths: string[]) => {
+    if (isGuestAccess()) return { ok: false, added: 0, errors: [GUEST_ACTION_ERROR] }
     const limits = getEnforcedEntitlements()
     let added = 0
     const errors: string[] = []

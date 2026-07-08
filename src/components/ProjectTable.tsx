@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Play, Square, RotateCcw, ScrollText, Hammer, FolderOpen, Trash2, GitBranch } from 'lucide-react'
 import { useApp } from '../state/store'
 import { api } from '../lib/ipc'
+import { useGuestLock } from '../lib/guest'
 import { confirmAction } from '../state/confirm'
 import { FrameworkIcon } from './FrameworkIcon'
 import { StatusBadge } from './StatusBadge'
@@ -43,6 +44,7 @@ function ActionBtn({
 
 export function ProjectTable({ projects }: { projects: Project[] }) {
   const navigate = useNavigate()
+  const { guardGuest } = useGuestLock()
   const runtime = useApp((s) => s.runtime)
   const gitStatus = useApp((s) => s.gitStatus)
   const health = useApp((s) => s.health)
@@ -107,7 +109,10 @@ export function ProjectTable({ projects }: { projects: Project[] }) {
                 }}
               >
               <tr
-                onClick={() => navigate(`/projects/${p.id}`)}
+                onClick={() => {
+                  if (guardGuest()) return
+                  navigate(`/projects/${p.id}`)
+                }}
                 className="cursor-pointer border-t border-edge bg-panel transition-colors hover:bg-slate-800/40"
               >
                 <td className="px-4 py-3.5">
@@ -178,7 +183,13 @@ export function ProjectTable({ projects }: { projects: Project[] }) {
                         </ActionBtn>
                       </>
                     )}
-                    <ActionBtn title="Logs" onClick={() => navigate(`/projects/${p.id}`)}>
+                    <ActionBtn
+                      title="Logs"
+                      onClick={() => {
+                        if (guardGuest()) return
+                        navigate(`/projects/${p.id}`)
+                      }}
+                    >
                       <ScrollText size={15} />
                     </ActionBtn>
                     <ActionBtn title="Open folder" onClick={() => api.openFolder(p.id)}>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, CheckCircle2, XCircle, AlertTriangle, Info, Check, Trash2 } from 'lucide-react'
 import { useNotifications, type NotifyLevel } from '../state/notifications'
+import { useGuestLock } from '../lib/guest'
 import { timeAgo } from '../lib/format'
 
 const ICON: Record<NotifyLevel, typeof CheckCircle2> = {
@@ -20,6 +21,7 @@ const COLOR: Record<NotifyLevel, string> = {
 
 export function NotificationBell() {
   const navigate = useNavigate()
+  const { guardGuest } = useGuestLock()
   const items = useNotifications((s) => s.items)
   const markAllRead = useNotifications((s) => s.markAllRead)
   const remove = useNotifications((s) => s.remove)
@@ -39,6 +41,7 @@ export function NotificationBell() {
   }, [open])
 
   function toggle() {
+    if (guardGuest()) return
     setOpen((o) => {
       if (!o && unread > 0) setTimeout(markAllRead, 800)
       return !o
@@ -61,7 +64,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="animate-pop-in absolute top-[calc(100%+6px)] right-0 z-50 w-80 overflow-hidden rounded-xl border border-edge bg-panel shadow-2xl">
+        <div className="app-frost-popover animate-pop-in absolute top-[calc(100%+6px)] right-0 z-50 w-80 overflow-hidden rounded-xl border border-edge shadow-2xl">
           <div className="flex items-center justify-between border-b border-edge px-4 py-2.5">
             <h4 className="text-sm font-semibold text-white">Notifications</h4>
             {items.length > 0 && (
@@ -81,6 +84,7 @@ export function NotificationBell() {
                     key={item.id}
                     onClick={() => {
                       if (item.route) {
+                        if (guardGuest()) return
                         navigate(item.route)
                         setOpen(false)
                       }

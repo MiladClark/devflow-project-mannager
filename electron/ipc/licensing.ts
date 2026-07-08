@@ -7,6 +7,7 @@ import {
   clearLicense,
   setServerUrl,
   startOAuthSignIn,
+  enterGuestMode,
   signOutDevice,
   pollValidateIfLicensed,
   startLicensePolling,
@@ -20,6 +21,7 @@ export function registerLicensingHandlers() {
   ipcMain.handle('license:clear', () => clearLicense())
   ipcMain.handle('license:setServerUrl', (_e, url: string) => setServerUrl(url))
   ipcMain.handle('auth:start', () => startOAuthSignIn())
+  ipcMain.handle('auth:guest', () => enterGuestMode())
   ipcMain.handle('auth:signOut', () => signOutDevice())
   ipcMain.handle('auth:status', () => getLicenseState())
   ipcMain.handle('license:poll', () => pollValidateIfLicensed())

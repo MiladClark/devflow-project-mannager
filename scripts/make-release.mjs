@@ -44,13 +44,14 @@ const nextVersion = bumpPatch(currentVersion);
 function isValidVersion(v) {
   return /^\d+\.\d+\.\d+([-.].+)?$/.test(v.trim());
 }
-async function prompt(question) {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return (await rl.question(question)).trim();
-  } finally {
-    rl.close();
-  }
+// Accept a bare patch number too (e.g. typing "12" on top of 0.1.9 → 0.1.12),
+// since typing the full X.Y.Z every time is what actually confused people
+// into thinking their input was being ignored in favor of the auto-bump.
+function expandBareNumber(v) {
+  if (!/^\d+$/.test(v.trim())) return v;
+  const m = currentVersion.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return v;
+  return `${m[1]}.${m[2]}.${v.trim()}`;
 }
 async function resolveVersion() {
   // non-interactive escape hatches for automation
@@ -65,23 +66,41 @@ async function resolveVersion() {
   if (!process.stdin.isTTY) return nextVersion;
 
   console.log(`\n  Current version: ${currentVersion}`);
-  console.log(`  [N] New version — type it   (default ${nextVersion})`);
-  console.log(`  [R] Auto +1     — bump to   ${nextVersion}`);
-  const choice = (await prompt(`  Choice [N/R]: `)).toLowerCase();
-  if (choice === "n" || choice === "new") {
-    let v = await prompt(`  New version (Enter for ${nextVersion}): `);
-    if (!v) return nextVersion;
-    while (!isValidVersion(v)) {
-      v = await prompt(`  Invalid. Enter like 0.1.6 (Enter for ${nextVersion}): `);
+  console.log(`  [N] New version  — type it   (e.g. 0.2.0, or just "12" for patch → ${currentVersion.replace(/\d+$/, "12")})`);
+  console.log(`  [R] Auto +1      — bump to   ${nextVersion}`);
+  console.log(`  [S] Same version — rebuild ${currentVersion} in place (overwrites the existing release)`);
+
+  // A single shared readline interface for the whole prompt sequence — creating
+  // and closing a new one per question (as before) could drop/misroute input
+  // typed right after the first answer on Windows consoles, silently falling
+  // back to the auto-bump even when the user *did* type a version.
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const ask = async (q) => (await rl.question(q)).trim();
+  try {
+    const choice = (await ask(`  Choice [N/R/S] (default R): `)).toLowerCase();
+    if (choice === "s" || choice === "same") return currentVersion;
+    if (choice === "n" || choice === "new") {
+      let v = expandBareNumber(await ask(`  New version (Enter for ${nextVersion}): `));
       if (!v) return nextVersion;
+      while (!isValidVersion(v)) {
+        v = expandBareNumber(
+          await ask(`  Invalid — enter a full version like 0.1.6, just a number like 12, or Enter for ${nextVersion}: `)
+        );
+        if (!v) return nextVersion;
+      }
+      return v;
     }
-    return v;
+    // R, empty, or anything else → auto +1
+    return nextVersion;
+  } finally {
+    rl.close();
   }
-  // R or Enter → auto +1
-  return nextVersion;
 }
 
 const version = await resolveVersion();
+console.log(`\n  ================================`);
+console.log(`   Building version: ${version}`);
+console.log(`  ================================`);
 if (version !== currentVersion) {
   pkg.version = version;
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");

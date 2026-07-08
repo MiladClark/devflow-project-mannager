@@ -22,6 +22,7 @@ export function Projects() {
 
   const limited = Number.isFinite(entitlements.maxProjects)
   const limitReached = entitlements.loaded && projects.length >= entitlements.maxProjects
+  const guestLocked = entitlements.guest
 
   async function importProject() {
     setError('')
@@ -51,7 +52,7 @@ export function Projects() {
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-3">
           <h2 className="text-2xl font-bold text-white">Projects</h2>
-          {entitlements.loaded && limited && (
+          {entitlements.loaded && limited && !guestLocked && (
             <span className={`text-sm ${limitReached ? 'text-amber-300' : 'text-slate-500'}`}>
               {projects.length}/{entitlements.maxProjects} on Free plan
             </span>
@@ -60,29 +61,33 @@ export function Projects() {
         <div className="flex gap-2">
           <button
             onClick={() => setScanOpen(true)}
-            disabled={limitReached}
+            disabled={limitReached || guestLocked}
             className="flex items-center gap-2 rounded-lg border border-edge bg-panel px-4 py-2 text-sm font-medium text-slate-200 hover:border-accent/50 disabled:opacity-40"
           >
             <FolderSearch size={15} /> Scan folder
           </button>
           <button
             onClick={importProject}
-            disabled={limitReached}
-            title={limitReached ? 'Free plan project limit reached — upgrade to import more' : undefined}
+            disabled={limitReached || guestLocked}
+            title={guestLocked ? 'Sign in to import projects' : limitReached ? 'Free plan project limit reached — upgrade to import more' : undefined}
             className="flex items-center gap-2 rounded-lg border border-edge bg-panel px-4 py-2 text-sm font-medium text-slate-200 hover:border-accent/50 disabled:opacity-40"
           >
             <FolderInput size={15} /> Import Existing
           </button>
           <button
             onClick={() => navigate('/new')}
-            className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:bg-cyan-300"
+            disabled={guestLocked || limitReached}
+            className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:bg-cyan-300 disabled:opacity-40"
           >
             <Plus size={15} /> New Project
           </button>
         </div>
       </div>
 
-      {limitReached && (
+      {guestLocked && (
+        <UpgradePrompt message="You are in guest mode. Sign in with DevTune to import, create, and run projects." />
+      )}
+      {!guestLocked && limitReached && (
         <UpgradePrompt message="You have reached the Free plan limit of 3 projects. Upgrade to Pro for unlimited projects, CMS templates and more." />
       )}
 

@@ -155,6 +155,7 @@ export interface Api {
   clearLicense(): Promise<LicenseState>
   setLicenseServerUrl(url: string): Promise<LicenseState>
   startAuth(): Promise<LicenseActionResult>
+  enterGuestMode(): Promise<LicenseState>
   signOutAuth(): Promise<LicenseActionResult>
   getAuthStatus(): Promise<LicenseState>
   pollLicense(): Promise<void>
@@ -530,6 +531,16 @@ function createMockApi(): Api {
       appVersion: '0.1.0',
     }),
     startAuth: async () => ({ ok: false, error: 'Not available in browser preview' }),
+    enterGuestMode: async () => ({
+      activated: false,
+      valid: false,
+      inGrace: false,
+      signedIn: false,
+      guestMode: true,
+      serverUrl: 'https://devtune-website.vercel.app',
+      appVersion: '0.1.8',
+      deviceLabel: 'BROWSER-MOCK',
+    }),
     signOutAuth: async () => ({ ok: false, error: 'Not available in browser preview' }),
     getAuthStatus: async () => ({
       activated: false,

@@ -16,6 +16,7 @@ import {
   Search,
 } from 'lucide-react'
 import { useApp } from '../state/store'
+import { useGuestLock } from '../lib/guest'
 import { api } from '../lib/ipc'
 import { PAGES } from '../lib/nav'
 import { THEMES, applyTheme, getThemeChoice } from '../lib/theme'
@@ -31,6 +32,7 @@ interface Command {
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate()
+  const { guardGuest } = useGuestLock()
   const { projects, runtime } = useApp()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
@@ -185,6 +187,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   function run(cmd: Command) {
     onClose()
+    if (guardGuest()) return
     cmd.perform()
   }
 

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { SkeletonAccountPage } from '../components/Skeleton'
 import { api, isElectron } from '../lib/ipc'
+import { isGuestLicense } from '../lib/entitlements'
 import { notify } from '../state/notifications'
 import type { LicenseState, UpdateCheckResult } from '../shared/types'
 
@@ -23,6 +24,13 @@ function fmtTs(sec?: number) {
 }
 
 function StatusPill({ state }: { state: LicenseState }) {
+  if (isGuestLicense(state)) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-sm text-amber-300">
+        <ShieldAlert size={14} /> Guest mode
+      </span>
+    )
+  }
   if (!state.signedIn) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-600/60 bg-slate-700/20 px-3 py-1 text-sm text-slate-400">
@@ -186,6 +194,23 @@ export function Account() {
     }
   }
 
+  async function exitGuest() {
+    setBusy('clear')
+    const st = await api.clearLicense()
+    setBusy('')
+    setState(st)
+    setNotice('Returned to the sign-in screen.')
+  }
+
+  async function signInFromGuest() {
+    if (!isElectron) return
+    setBusy('auth')
+    const res = await api.startAuth()
+    setBusy('')
+    if (res.ok && res.state) setState(res.state)
+    else setNotice(res.error ?? 'Sign in failed')
+  }
+
   async function saveServerUrl() {
     const st = await api.setLicenseServerUrl(serverUrl.trim())
     setState(st)
@@ -270,6 +295,30 @@ export function Account() {
             </button>
           </div>
           <p className="mt-3 text-xs text-slate-500">Sign out requires an internet connection and frees this device seat immediately.</p>
+        </div>
+      ) : isGuestLicense(state) ? (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-5">
+          <h4 className="mb-2 text-xs font-semibold tracking-wider text-amber-300/80 uppercase">Guest mode</h4>
+          <p className="mb-4 text-sm text-slate-400">
+            You are browsing without a DevTune account. Sign in to unlock projects, terminals, imports, and licensing.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={signInFromGuest}
+              disabled={busy === 'auth' || !isElectron}
+              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:bg-cyan-300 disabled:opacity-50"
+            >
+              {busy === 'auth' ? <Loader2 size={14} className="animate-spin" /> : null}
+              Sign in with DevTune
+            </button>
+            <button
+              onClick={exitGuest}
+              disabled={busy === 'clear'}
+              className="rounded-lg border border-edge px-4 py-2 text-sm text-slate-300 hover:border-accent/50 disabled:opacity-50"
+            >
+              Back to sign-in screen
+            </button>
+          </div>
         </div>
       ) : (
         <p className="text-sm text-slate-500">Use Sign in with DevTune from the app welcome screen.</p>

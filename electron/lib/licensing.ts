@@ -10,7 +10,13 @@ import { runOAuthLoopback } from './oauth-loopback'
 
 export { FREE_LIMITS, type EnforcedEntitlements }
 
-export const DEFAULT_SERVER_URL = process.env.DEVTUNE_URL ?? 'https://devtune-website.vercel.app'
+export const DEFAULT_SERVER_URL = process.env.DEVTUNE_URL ?? 'https://devtune.app'
+
+// Legacy backend hosts that should be migrated to the live domain on load.
+const LEGACY_SERVER_URLS = [
+  'https://devtune-website.vercel.app',
+  'http://devtune-website.vercel.app',
+]
 
 // Ed25519 public key matching the DevTune licensing service (LICENSE_PUBLIC_KEY)
 const LICENSE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
@@ -63,6 +69,12 @@ function load(): PersistedLicense {
     save()
   }
   if (!cache!.serverUrl) cache!.serverUrl = DEFAULT_SERVER_URL
+  // One-time migration: move existing installs off the old Vercel host.
+  const current = cache!.serverUrl.replace(/\/+$/, '')
+  if (LEGACY_SERVER_URLS.includes(current)) {
+    cache!.serverUrl = DEFAULT_SERVER_URL
+    save()
+  }
   return cache!
 }
 

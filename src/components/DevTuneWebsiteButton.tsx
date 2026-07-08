@@ -5,7 +5,7 @@ import { useGuestLock } from '../lib/guest'
 
 export function DevTuneWebsiteButton() {
   const { guardGuest } = useGuestLock()
-  const [url, setUrl] = useState('https://devtune-website.vercel.app')
+  const [url, setUrl] = useState('https://devtune.app')
 
   useEffect(() => {
     let cancelled = false

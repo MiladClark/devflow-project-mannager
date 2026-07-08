@@ -381,6 +381,48 @@ pre,
   @apply bg-rose-600 text-white;
 }
 
+/* ---------- Theme-aware switches ---------- */
+.app-switch {
+  @apply relative shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40;
+  border-color: color-mix(in srgb, var(--color-edge) 80%, transparent);
+  background: color-mix(in srgb, var(--color-edge) 55%, var(--color-panel2));
+}
+.app-switch-on {
+  border-color: color-mix(in srgb, var(--color-accent) 70%, transparent);
+  background: var(--color-accent);
+}
+.app-switch-sm {
+  @apply h-4 w-7;
+}
+.app-switch-md {
+  @apply h-5 w-9;
+}
+.app-switch-knob {
+  @apply absolute top-1/2 rounded-full shadow-sm;
+  left: 0.125rem;
+  transform: translateY(-50%);
+  transition:
+    left 0.2s ease,
+    right 0.2s ease,
+    transform 0.2s ease,
+    background-color 0.2s ease;
+  background: #ffffff;
+}
+.app-switch-on .app-switch-knob {
+  left: auto;
+  right: 0.125rem;
+  transform: translateY(-50%);
+}
+html[data-mode="light"] .app-switch-knob {
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-edge) 65%, transparent);
+}
+.app-switch-knob-sm {
+  @apply h-3 w-3;
+}
+.app-switch-knob-md {
+  @apply h-4 w-4;
+}
+
 /* ---------- Sidebar nav links ---------- */
 .nav-link {
   @apply relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-400;
@@ -394,11 +436,21 @@ pre,
   @apply text-slate-200;
   background: color-mix(in srgb, var(--color-edge) 60%, transparent);
 }
-html[data-mode="light"] .app-sidebar:hover .nav-link {
-  @apply text-slate-300;
+html[data-mode="light"] .app-sidebar:hover .nav-link,
+html[data-mode="light"] .app-sidebar-pinned .nav-link {
+  @apply text-slate-400;
 }
-html[data-mode="light"] .app-sidebar:hover .nav-link:hover {
+html[data-mode="light"] .app-sidebar:hover .nav-link:hover,
+html[data-mode="light"] .app-sidebar-pinned .nav-link:hover {
   @apply text-slate-200;
+}
+html[data-mode="light"] .app-sidebar:hover .app-sidebar-group-title,
+html[data-mode="light"] .app-sidebar-pinned .app-sidebar-group-title {
+  @apply text-slate-500;
+}
+html[data-mode="light"] .app-sidebar:hover .app-sidebar-pin-label,
+html[data-mode="light"] .app-sidebar-pinned .app-sidebar-pin-label {
+  @apply text-slate-400;
 }
 .nav-link:hover svg {
   transform: translateX(1px);
@@ -426,16 +478,18 @@ html[data-mode="light"] .app-sidebar:hover .nav-link:hover {
   width: 4.25rem;
   transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.app-sidebar:hover {
+.app-sidebar:hover,
+.app-sidebar-pinned {
   width: 14rem;
 }
 .app-sidebar-nav {
-  @apply flex flex-col py-3;
+  @apply flex min-h-0 flex-1 flex-col py-3;
 }
 .app-sidebar-section {
   @apply flex flex-col gap-0.5 px-2;
 }
-.app-sidebar:hover .app-sidebar-section {
+.app-sidebar:hover .app-sidebar-section,
+.app-sidebar-pinned .app-sidebar-section {
   @apply px-3;
 }
 .app-sidebar-links {
@@ -453,12 +507,14 @@ html[data-mode="light"] .app-sidebar:hover .nav-link:hover {
     max-width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
     max-height 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.app-sidebar:hover .app-sidebar-label {
+.app-sidebar:hover .app-sidebar-label,
+.app-sidebar-pinned .app-sidebar-label {
   @apply opacity-100;
   max-width: 12rem;
   max-height: 2rem;
 }
-.app-sidebar:hover .app-sidebar-group-title {
+.app-sidebar:hover .app-sidebar-group-title,
+.app-sidebar-pinned .app-sidebar-group-title {
   @apply px-2 pb-1 opacity-100;
   max-width: 12rem;
   max-height: 2rem;
@@ -469,7 +525,8 @@ html[data-mode="light"] .app-sidebar:hover .nav-link:hover {
 .app-sidebar .nav-link {
   @apply justify-center gap-0 px-2 py-2.5;
 }
-.app-sidebar:hover .nav-link {
+.app-sidebar:hover .nav-link,
+.app-sidebar-pinned .nav-link {
   @apply justify-start gap-3 px-3;
 }
 .app-sidebar-divider {
@@ -480,9 +537,26 @@ html[data-mode="light"] .app-sidebar:hover .nav-link:hover {
     width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
     margin 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.app-sidebar:hover .app-sidebar-divider {
+.app-sidebar:hover .app-sidebar-divider,
+.app-sidebar-pinned .app-sidebar-divider {
   width: 100%;
   margin-inline: 0;
+}
+.app-sidebar-footer {
+  @apply mt-auto flex shrink-0 items-center justify-center gap-2 border-t border-edge/55 px-2 py-2.5;
+}
+.app-sidebar:hover .app-sidebar-footer,
+.app-sidebar-pinned .app-sidebar-footer {
+  @apply justify-start px-3;
+}
+.app-sidebar-pin-label {
+  @apply min-w-0 flex-1 text-xs text-slate-500;
+}
+.app-sidebar-pin-switch {
+  @apply ml-auto;
+}
+.app-sidebar:not(:hover):not(.app-sidebar-pinned) .app-sidebar-pin-switch {
+  @apply ml-0;
 }
 
 ::-webkit-scrollbar {

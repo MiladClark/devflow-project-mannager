@@ -12,11 +12,36 @@ export { FREE_LIMITS, type EnforcedEntitlements }
 
 export const DEFAULT_SERVER_URL = process.env.DEVTUNE_URL ?? 'https://devtune.app'
 
-// Legacy backend hosts that should be migrated to the live domain on load.
-const LEGACY_SERVER_URLS = [
-  'https://devtune.app',
-  'http://devtune.app',
-]
+/** Hostnames that should be migrated to DEFAULT_SERVER_URL on load. */
+function shouldMigrateServerUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return (
+      host === 'devtune-website.vercel.app' ||
+      (host.endsWith('.vercel.app') && host.includes('devtune'))
+    )
+  } catch {
+    return false
+  }
+}
+
+function normalizeServerUrl(url: string | undefined): string {
+  const trimmed = (url ?? '').trim().replace(/\/+$/, '')
+  if (!trimmed) return DEFAULT_SERVER_URL
+  if (shouldMigrateServerUrl(trimmed)) return DEFAULT_SERVER_URL
+  return trimmed
+}
+
+/** Always use a normalized origin for outbound DevTune requests. */
+function resolvedServerUrl(): string {
+  const st = load()
+  const normalized = normalizeServerUrl(st.serverUrl)
+  if (normalized !== st.serverUrl.replace(/\/+$/, '')) {
+    st.serverUrl = normalized
+    save()
+  }
+  return normalized
+}
 
 // Ed25519 public key matching the DevTune licensing service (LICENSE_PUBLIC_KEY)
 const LICENSE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
@@ -61,18 +86,18 @@ function filePath() {
 }
 
 function load(): PersistedLicense {
-  if (cache) return cache
-  try {
-    cache = JSON.parse(fs.readFileSync(filePath(), 'utf-8'))
-  } catch {
-    cache = { serverUrl: DEFAULT_SERVER_URL, installId: crypto.randomUUID() }
-    save()
+  if (!cache) {
+    try {
+      cache = JSON.parse(fs.readFileSync(filePath(), 'utf-8'))
+    } catch {
+      cache = { serverUrl: DEFAULT_SERVER_URL, installId: crypto.randomUUID() }
+      save()
+    }
   }
   if (!cache!.serverUrl) cache!.serverUrl = DEFAULT_SERVER_URL
-  // One-time migration: move existing installs off the old Vercel host.
-  const current = cache!.serverUrl.replace(/\/+$/, '')
-  if (LEGACY_SERVER_URLS.includes(current)) {
-    cache!.serverUrl = DEFAULT_SERVER_URL
+  const normalized = normalizeServerUrl(cache!.serverUrl)
+  if (normalized !== cache!.serverUrl.replace(/\/+$/, '')) {
+    cache!.serverUrl = normalized
     save()
   }
   return cache!
@@ -159,7 +184,7 @@ export function getLicenseState(): LicenseState {
     inGrace: false,
     signedIn: !!st.signedIn,
     guestMode: !!st.guestMode && !st.signedIn,
-    serverUrl: st.serverUrl,
+    serverUrl: resolvedServerUrl(),
     appVersion: app.getVersion(),
     deviceLabel: os.hostname(),
     licenseKey: maskKey(st.licenseKey),
@@ -201,8 +226,7 @@ export function getLicenseState(): LicenseState {
 // ---- server calls ----
 
 async function post(pathname: string, body: unknown): Promise<{ status: number; json: any }> {
-  const st = load()
-  const res = await fetch(new URL(pathname, st.serverUrl), {
+  const res = await fetch(new URL(pathname, resolvedServerUrl()), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -300,9 +324,8 @@ export async function pollValidateIfLicensed(): Promise<void> {
 }
 
 export async function startOAuthSignIn(): Promise<LicenseActionResult> {
-  const st = load()
   try {
-    const { code, state } = await runOAuthLoopback(st.serverUrl)
+    const { code, state } = await runOAuthLoopback(resolvedServerUrl())
     return completeOAuthExchange(code, state)
   } catch (err) {
     return {
@@ -430,7 +453,7 @@ export function setServerUrl(url: string): LicenseState {
   try {
     const u = new URL(url)
     if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('bad protocol')
-    st.serverUrl = u.origin
+    st.serverUrl = normalizeServerUrl(u.origin)
     save()
   } catch {
     /* keep previous URL on invalid input */

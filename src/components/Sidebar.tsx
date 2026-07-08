@@ -1,12 +1,20 @@
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { NAV_GROUPS } from '../lib/nav'
 import { useGuestLock } from '../lib/guest'
+import { getSidebarPinned, setSidebarPinned } from '../lib/sidebar'
+import { Switch } from './Switch'
 
 export function Sidebar() {
   const { guardGuest } = useGuestLock()
+  const [pinned, setPinned] = useState(getSidebarPinned)
+
+  useEffect(() => {
+    setSidebarPinned(pinned)
+  }, [pinned])
 
   return (
-    <aside className="app-sidebar group/sidebar">
+    <aside className={`app-sidebar group/sidebar${pinned ? ' app-sidebar-pinned' : ''}`}>
       <nav className="app-sidebar-nav" aria-label="Main navigation">
         {NAV_GROUPS.map((group, gi) => (
           <section key={group.title} className="app-sidebar-section">
@@ -33,6 +41,16 @@ export function Sidebar() {
           </section>
         ))}
       </nav>
+
+      <div className="app-sidebar-footer">
+        <span className="app-sidebar-label app-sidebar-pin-label">Pin sidebar</span>
+        <Switch
+          checked={pinned}
+          onChange={setPinned}
+          size="sm"
+          className="app-sidebar-pin-switch shrink-0"
+        />
+      </div>
     </aside>
   )
 }

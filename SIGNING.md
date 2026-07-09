@@ -1,60 +1,76 @@
-# Code signing & the "unknown publisher" download warning
+# Code signing & the SmartScreen warning
 
-## Why the warning appears
+## Honest answer (no Azure / no paid cert)
 
-Every DevFlow Manager artifact we ship today is **unsigned**:
+**There is no free way to fully remove** Windows “Unknown publisher / Windows protected your PC” for a normal desktop EXE you host yourself.
 
-- `electron-builder.yml` (`win` block) has no `certificateFile` / `signtool` config — target is `dir` only.
-- Builds run with signing explicitly disabled: `CSC_IDENTITY_AUTO_DISCOVERY: "false"` in `scripts/make-release.mjs` and `scripts/package-portable.mjs`.
-- The Inno Setup installer (`…/.staging/DevFlow-Manager-<ver>/setup.iss`) has no `SignTool` directive, so `DevFlowManager-Setup.exe` is unsigned too.
-- The only integrity check in the auto-updater is an **optional** server-supplied SHA-256 (`electron/lib/updater.ts` — `if (info.checksum)`).
+| Approach | Cost | Clears SmartScreen? |
+|----------|------|---------------------|
+| Do nothing (current local builds) | Free | No |
+| Self-signed certificate | Free | No — Windows still treats it as untrusted |
+| Azure Trusted Signing | Paid (~subscription) | Yes (after setup) — **you said you don’t want this** |
+| OV code-signing cert (DigiCert, Sectigo, SSL.com, …) | Paid yearly | Eventually / with reputation |
+| EV code-signing cert | Paid yearly (higher) | Usually yes, quickly |
+| Microsoft Store | Store fees / account | Different trust model |
 
-Because the EXE carries no Authenticode signature and no SmartScreen reputation, Windows shows **"Windows protected your PC / unknown publisher"** on download and first run. This is expected for any unsigned executable — it is not a false positive and cannot be fixed with metadata (publisher name, icon, etc.) alone.
+So if you **won’t pay Azure and won’t buy any cert**, the warning will stay. That is a Windows policy, not something DevFlow can patch in code.
 
-## The production fix (recommended order)
+What we *did* wire in the repo: optional signing when **you** later provide a PFX (or Azure). Local builds stay unsigned and still work.
 
-### 1. Azure Trusted Signing — recommended
-Microsoft's cloud signing service. Cheapest path to a **trusted-immediately** signature (no EV hardware token, no HSM).
+---
 
-- ~US$10/month, identity validation required (individual or organization).
-- Signs in CI with `signtool` + the Trusted Signing dlib; no cert file to store.
-- Certificates are short-lived and rotated by Azure — nothing to renew manually.
-- Gives SmartScreen reputation quickly because the root is Microsoft-operated.
+## What the build does
 
-### 2. EV / OV code-signing certificate — alternative
-From DigiCert, Sectigo, SSL.com, etc.
+| Step | Behavior |
+|------|----------|
+| `make-release.mjs` / `package-portable.mjs` | After icon embed, calls `scripts/sign-windows.mjs` |
+| No credentials | Warns and continues **unsigned** (fine for you) |
+| `SIGNING_REQUIRED=1` | Fail if unsigned — only use if you later buy a cert |
+| Auto-updater | Requires SHA-256 checksum on updates |
 
-- **EV** (~US$250–400/yr, hardware token or cloud HSM): trusted by SmartScreen essentially immediately.
-- **OV** (~US$120–200/yr): cheaper, but SmartScreen reputation **ramps over time / download volume** — early users may still see the warning for a while.
+---
 
-## Where to wire it later (no changes made yet)
+## If you later buy a normal cert (not Azure)
 
-When a certificate/Trusted Signing account exists:
+Buy an **OV or EV code signing** certificate as a `.pfx`, then:
 
-1. **App EXE — `scripts/make-release.mjs`**
-   Add a `signtool` step **after** the `rcedit` icon embed and **before** copying to the staging folder:
-   ```
-   signtool sign /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 <options> "release/win-unpacked/DevFlow Manager.exe"
-   ```
-   Remove `CSC_IDENTITY_AUTO_DISCOVERY: "false"` (or replace with real `CSC_LINK`/`CSC_KEY_PASSWORD` for a cert file), or use electron-builder's `win.certificateFile` / `win.signtoolOptions` instead of a manual step.
+```bat
+set WIN_CSC_LINK=C:\certs\devflow-codesign.pfx
+set WIN_CSC_KEY_PASSWORD=********
+build-release.bat --same
+```
 
-2. **Installer — `setup.iss`**
-   Register a sign tool in Inno Setup, then add to `[Setup]`:
-   ```
-   SignTool=signtool $f
-   SignedUninstaller=yes
-   ```
-   (Configure the `signtool` command once under Tools → Configure Sign Tools in the Inno IDE, or `iscc /Ssigntool=...`.)
+Or:
 
-3. **Update ZIP payload**
-   Sign the packaged EXE **before** `scripts/package-zip.mjs` zips it, so OTA updates are signed too.
+```bat
+npm run sign:windows -- --require "path\to\DevFlow Manager.exe"
+```
 
-4. **Harden the updater** (`electron/lib/updater.ts`)
-   Once payloads are signed, make the checksum **required** instead of optional — change the `if (info.checksum)` guard to reject updates that don't provide a matching SHA-256.
+Also set `SIGNING_REQUIRED=1` on any machine that must never ship unsigned.
 
-## Quick reference — what stays unsigned until this is done
-- `DevFlow Manager.exe` (portable / unpacked)
-- `DevFlowManager-Setup.exe` (Inno installer)
-- `devflow-<version>-win-x64.zip` (OTA update payload)
+---
 
-All three need the same certificate; sign the EXE first, then package/installer around it.
+## Azure Trusted Signing (skip if you don’t want to pay)
+
+Documented only for completeness. Needs a paid Azure Trusted Signing account + Client Tools + env vars `AZURE_TRUSTED_SIGNING_*`. You can ignore this entirely.
+
+---
+
+## Practical tips without signing
+
+- Tell users: click **More info → Run anyway** (expected for unsigned apps).
+- Prefer distributing a **ZIP portable** or installer with clear publisher name in your website copy (doesn’t remove SmartScreen, reduces support confusion).
+- Keep update **checksums** required (already done) so unsigned updates aren’t silently swapped.
+
+## Policy flags
+
+| Variable | Effect |
+|----------|--------|
+| `SIGNING_SKIP=1` | Never attempt signing |
+| `SIGNING_REQUIRED=1` | Fail build if signing fails (don’t set this if you have no cert) |
+| `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` | PFX signing |
+| `SIGNTOOL_PATH` | Override `signtool.exe` |
+
+---
+
+**Bottom line:** Without paying for Azure *or* a code-signing certificate, leave builds unsigned and accept SmartScreen. The tooling is ready for a PFX whenever you decide to buy one.

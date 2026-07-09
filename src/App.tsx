@@ -16,6 +16,7 @@ import { Settings } from './pages/Settings'
 import { NewProject } from './pages/NewProject'
 import { SystemHealth } from './pages/SystemHealth'
 import { LoginGate } from './components/LoginGate'
+import { OnboardingGate } from './components/OnboardingGate'
 import { Splash } from './components/Splash'
 import { UpdateRoot } from './components/UpdateRoot'
 import { CommandPalette } from './components/CommandPalette'
@@ -135,9 +136,11 @@ export default function App() {
       <Toaster />
       <ConfirmDialog />
       <UpdateRoot />
-      <LoginGate>
-        <Layout />
-      </LoginGate>
+      <OnboardingGate>
+        <LoginGate>
+          <Layout />
+        </LoginGate>
+      </OnboardingGate>
     </HashRouter>
   )
 }

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-for (const dir of ['dist', 'dist-electron', 'release', 'devflow']) {
+for (const dir of ['dist', 'dist-electron', 'release', 'devflow', '.verify-tmp']) {
   const target = path.join(root, dir)
   if (existsSync(target)) {
     try {

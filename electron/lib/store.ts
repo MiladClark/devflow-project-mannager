@@ -35,6 +35,7 @@ const defaults = (): StoreData => ({
     localDomainsEnabled: false,
     localDomainSuffix: 'test',
     proxyAutoStart: true,
+    onboardingComplete: false,
   },
 })
 
@@ -52,6 +53,10 @@ function load(): StoreData {
     const base = defaults()
     // deep-merge settings so newly introduced keys keep their defaults
     const loaded: StoreData = { ...base, ...parsed, settings: { ...base.settings, ...(parsed.settings ?? {}) } }
+    // Existing installs predating the wizard should not be forced through onboarding
+    if (parsed.settings && !Object.prototype.hasOwnProperty.call(parsed.settings, 'onboardingComplete')) {
+      loaded.settings.onboardingComplete = true
+    }
 
     const { projects, changed } = healProjects(loaded.projects)
     if (changed.length > 0) {

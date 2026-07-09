@@ -149,6 +149,8 @@ export interface AppSettings {
   localDomainsEnabled: boolean
   localDomainSuffix: string
   proxyAutoStart: boolean
+  /** First-run setup wizard finished or skipped */
+  onboardingComplete: boolean
 }
 
 export interface ProjectScript {

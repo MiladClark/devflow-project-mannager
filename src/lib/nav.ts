@@ -18,6 +18,7 @@ export interface NavPage {
 }
 
 export interface NavGroup {
+  id: string
   title: string
   pages: NavPage[]
 }
@@ -25,6 +26,7 @@ export interface NavGroup {
 /** Sidebar groups — ordered by daily-use priority (workspace → system → data → app). */
 export const NAV_GROUPS: NavGroup[] = [
   {
+    id: 'workspace',
     title: 'Workspace',
     pages: [
       { label: 'Dashboard', to: '/', icon: LayoutDashboard },
@@ -33,6 +35,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: 'system',
     title: 'System',
     pages: [
       { label: 'System Health', to: '/system', icon: Activity },
@@ -40,6 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: 'data',
     title: 'Data',
     pages: [
       { label: 'Database', to: '/database', icon: Database },
@@ -47,6 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: 'app',
     title: 'App',
     pages: [
       { label: 'Account', to: '/account', icon: KeyRound },

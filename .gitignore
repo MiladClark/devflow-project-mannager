@@ -3,4 +3,5 @@ dist
 dist-electron
 release
 devflow
+.verify-tmp
 *.log

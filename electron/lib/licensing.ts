@@ -493,6 +493,15 @@ export function enterGuestMode(): LicenseState {
   return broadcastLicenseChanged()
 }
 
+/** Drop guest-only access so LoginGate can require an explicit choice again. */
+export function exitGuestMode(): LicenseState {
+  const st = load()
+  if (!st.guestMode) return getLicenseState()
+  st.guestMode = undefined
+  save()
+  return broadcastLicenseChanged()
+}
+
 export function getEnforcedEntitlements(): EnforcedEntitlements {
   if (isGuestAccess()) return GUEST_LIMITS
   const s = getLicenseState()

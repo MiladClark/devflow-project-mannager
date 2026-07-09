@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { rcedit } from "rcedit";
+import { signWindowsFiles } from "./sign-windows.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const staging = path.join(root, "release", "win-unpacked");
@@ -54,6 +55,13 @@ if (!existsSync(iconPath)) {
 
 await rcedit(exePath, { icon: iconPath });
 console.log(`Embedded icon into ${exePath}`);
+
+const signResult = signWindowsFiles(exePath);
+if (signResult.signed) {
+  console.log(`Signed EXE via ${signResult.mode}`);
+} else {
+  console.warn(`Unsigned EXE (${signResult.reason || signResult.mode}) — see SIGNING.md`);
+}
 
 if (existsSync(out)) {
   rmSync(out, { recursive: true, force: true });

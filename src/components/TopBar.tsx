@@ -1,6 +1,5 @@
 import { Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { UserProfileChip } from './UserProfileChip'
 import { SearchBox } from './SearchBox'
 import { NotificationBell } from './NotificationBell'
 import { DevTuneWebsiteButton } from './DevTuneWebsiteButton'
@@ -38,10 +37,6 @@ export function TopBar() {
           <h1 className="text-lg font-bold text-white">
             DevFlow <span className="font-normal text-slate-400">Manager</span>
           </h1>
-        </div>
-
-        <div className={interactive}>
-          <UserProfileChip />
         </div>
 
         <div className="flex min-w-0 flex-1 items-center justify-center">

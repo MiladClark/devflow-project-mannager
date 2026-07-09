@@ -11,6 +11,8 @@ electronLanguages:
 # so we must NOT let electron-builder recompile them (its rebuild of the bundled
 # winpty fails on GetCommitHash.bat). Shipping the prebuild is correct and works.
 npmRebuild: false
+# Whitelist only runtime artifacts. Source, scripts, verify caches, and
+# unused production deps must never land in the portable release.
 files:
   - dist/**
   - dist-electron/**
@@ -23,8 +25,31 @@ files:
   - "!node_modules/node-pty/prebuilds/win32-arm64"
   - "!node_modules/node-pty/deps/**"
   - "!node_modules/node-pty/src/**"
-  # non-runtime cruft: debug symbols (~28MB in node-pty) and source maps.
-  # These never load at runtime, so removing them is safe and shrinks the build.
+  - "!node_modules/node-pty/scripts/**"
+  - "!node_modules/node-pty/third_party/**"
+  - "!node_modules/node-pty/typings/**"
+  - "!node_modules/node-pty/build/**"
+  - "!node_modules/node-pty/binding.gyp"
+  - "!node_modules/node-pty/**/*.{md,markdown,ts,map}"
+  - "!node_modules/node-pty/**/{README*,CHANGELOG*,LICENSE*,*.d.ts}"
+  # Project junk / non-runtime trees (never needed inside asar)
+  - "!.verify-tmp/**"
+  - "!src/**"
+  - "!electron/**"
+  - "!scripts/**"
+  - "!public/**"
+  - "!build/**"
+  - "!.claude/**"
+  - "!.git/**"
+  - "!release/**"
+  - "!devflow/**"
+  - "!**/*.{md,MD}"
+  - "!tsconfig.json"
+  - "!vite.config.ts"
+  - "!build-release.bat"
+  - "!SIGNING.md"
+  - "!.gitignore"
+  # non-runtime cruft: debug symbols and source maps
   - "!**/*.pdb"
   - "!**/*.map"
 asarUnpack:

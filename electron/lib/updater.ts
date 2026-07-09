@@ -234,10 +234,11 @@ export async function startUpdate(version?: string) {
     })
     downloadAbort = null
 
-    if (info.checksum) {
-      emit({ phase: 'verifying', percent: 100, message: 'Verifying update…', version: info.version })
-      await verifyChecksum(zipPath, info.checksum)
+    if (!info.checksum) {
+      throw new Error('Update rejected: server did not provide a SHA-256 checksum.')
     }
+    emit({ phase: 'verifying', percent: 100, message: 'Verifying update…', version: info.version })
+    await verifyChecksum(zipPath, info.checksum)
 
     emit({ phase: 'applying', percent: 100, message: 'Applying update…', version: info.version })
     spawnApplyScript(zipPath, installDir, exeName)

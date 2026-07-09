@@ -120,6 +120,7 @@ const api = {
   setLicenseServerUrl: (url: string) => ipcRenderer.invoke('license:setServerUrl', url),
   startAuth: () => ipcRenderer.invoke('auth:start'),
   enterGuestMode: () => ipcRenderer.invoke('auth:guest'),
+  exitGuestMode: () => ipcRenderer.invoke('auth:exitGuest'),
   signOutAuth: () => ipcRenderer.invoke('auth:signOut'),
   getAuthStatus: () => ipcRenderer.invoke('auth:status'),
   pollLicense: () => ipcRenderer.invoke('license:poll'),

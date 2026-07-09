@@ -5,7 +5,10 @@
  * EXE, taskbar and system-tray all show it correctly.
  *
  * Steps: clean → icon → typecheck → vite build → electron-builder --dir →
- *        embed exe icon (rcedit) → copy to <staging>/<ProductName>-<version>/
+ *        embed exe icon (rcedit) → Authenticode sign → copy to staging
+ *
+ * Signing (optional locally, required in CI with SIGNING_REQUIRED=1):
+ *   Azure Trusted Signing env vars or WIN_CSC_LINK — see SIGNING.md
  *
  * Usage:
  *   node scripts/make-release.mjs                     # default staging dir
@@ -17,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { rcedit } from "rcedit";
+import { signWindowsFiles } from "./sign-windows.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pkgPath = path.join(root, "package.json");
@@ -175,11 +179,30 @@ if (!existsSync(iconPath)) {
 step("Embedding brand icon into the EXE (taskbar + file icon)");
 await rcedit(exePath, { icon: iconPath });
 
+step("Authenticode signing (Azure Trusted Signing or PFX)");
+const signResult = signWindowsFiles(exePath);
+if (signResult.signed) {
+  console.log(`  signed via ${signResult.mode}`);
+} else {
+  console.log(`  unsigned (${signResult.reason || signResult.mode})`);
+}
+
 // --- copy the finished app into the versioned release folder ---
 step(`Writing release folder: ${folderName}`);
 mkdirSync(outDir, { recursive: true });
 if (existsSync(targetDir)) rmSync(targetDir, { recursive: true, force: true });
 cpSync(staging, targetDir, { recursive: true });
+
+// Optional installer next to the portable folder (Inno Setup output)
+const installerCandidates = [
+  path.join(targetDir, "DevFlowManager-Setup.exe"),
+  path.join(outDir, "DevFlowManager-Setup.exe"),
+  path.join(targetDir, `DevFlowManager-Setup-${version}.exe`),
+].filter((p) => existsSync(p));
+if (installerCandidates.length > 0) {
+  step("Authenticode signing installer(s)");
+  signWindowsFiles(installerCandidates);
+}
 
 // tidy the intermediate build dir (best-effort)
 try {
@@ -189,4 +212,8 @@ try {
 }
 
 console.log(`\n✅ Release ready:\n   ${targetDir}`);
-console.log(`   Run:  "${path.join(targetDir, exeName)}"\n`);
+console.log(`   Run:  "${path.join(targetDir, exeName)}"`);
+if (!signResult.signed) {
+  console.log(`   ⚠ EXE is unsigned — configure Azure Trusted Signing or PFX (SIGNING.md) to clear SmartScreen.`);
+}
+console.log("");

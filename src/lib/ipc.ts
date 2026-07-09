@@ -156,6 +156,7 @@ export interface Api {
   setLicenseServerUrl(url: string): Promise<LicenseState>
   startAuth(): Promise<LicenseActionResult>
   enterGuestMode(): Promise<LicenseState>
+  exitGuestMode(): Promise<LicenseState>
   signOutAuth(): Promise<LicenseActionResult>
   getAuthStatus(): Promise<LicenseState>
   pollLicense(): Promise<void>
@@ -210,7 +211,7 @@ const MOCK_GIT: GitStatus = {
   fetchedAt: Date.now(),
 }
 
-const MOCK_SETTINGS: AppSettings = {
+let MOCK_SETTINGS: AppSettings = {
   reservedPorts: [3000, 3001],
   defaultProjectsDir: 'C:\\dev',
   closeToTray: false,
@@ -227,7 +228,20 @@ const MOCK_SETTINGS: AppSettings = {
   localDomainsEnabled: false,
   localDomainSuffix: 'test',
   proxyAutoStart: true,
+  onboardingComplete: false,
 }
+
+const mockLicenseBase: LicenseState = {
+  activated: false,
+  valid: false,
+  inGrace: false,
+  signedIn: false,
+  guestMode: false,
+  serverUrl: 'https://devtune.app',
+  appVersion: '0.1.8',
+  deviceLabel: 'DESKTOP-MOCK',
+}
+let mockLicense: LicenseState = { ...mockLicenseBase }
 
 /** Browser-only mock so the renderer can be previewed outside Electron. */
 function createMockApi(): Api {
@@ -379,7 +393,10 @@ function createMockApi(): Api {
       { id: 'a3', ts: Date.now() - 900000, level: 'info', title: 'Project Imported', message: 'vite-portfolio' },
     ],
     getSettings: async () => ({ ...MOCK_SETTINGS }),
-    updateSettings: async (p) => ({ ...MOCK_SETTINGS, ...p }),
+    updateSettings: async (p) => {
+      MOCK_SETTINGS = { ...MOCK_SETTINGS, ...p }
+      return { ...MOCK_SETTINGS }
+    },
     dockerStatus: async () => ({ installed: true, running: true, version: '27.0.1 (mock)' }),
     dockerContainers: async () => [
       {
@@ -503,53 +520,25 @@ function createMockApi(): Api {
     ],
     dbServiceAction: async () => ({ ok: false, error: 'Not available in browser preview' }),
     // browser preview simulates the free (not activated) state
-    getLicenseState: async () => ({
-      activated: false,
-      valid: false,
-      inGrace: false,
-      signedIn: false,
-      serverUrl: 'https://devtune.app',
-      appVersion: '0.1.0',
-      deviceLabel: 'DESKTOP-MOCK',
-    }),
+    getLicenseState: async () => ({ ...mockLicense }),
     activateLicense: async () => ({ ok: false, error: 'Not available in browser preview' }),
     refreshLicense: async () => ({ ok: false, error: 'Not available in browser preview' }),
-    clearLicense: async () => ({
-      activated: false,
-      valid: false,
-      inGrace: false,
-      signedIn: false,
-      serverUrl: 'https://devtune.app',
-      appVersion: '0.1.0',
-    }),
-    setLicenseServerUrl: async () => ({
-      activated: false,
-      valid: false,
-      inGrace: false,
-      signedIn: false,
-      serverUrl: 'https://devtune.app',
-      appVersion: '0.1.0',
-    }),
+    clearLicense: async () => {
+      mockLicense = { ...mockLicenseBase }
+      return { ...mockLicense }
+    },
+    setLicenseServerUrl: async () => ({ ...mockLicense }),
     startAuth: async () => ({ ok: false, error: 'Not available in browser preview' }),
-    enterGuestMode: async () => ({
-      activated: false,
-      valid: false,
-      inGrace: false,
-      signedIn: false,
-      guestMode: true,
-      serverUrl: 'https://devtune.app',
-      appVersion: '0.1.8',
-      deviceLabel: 'BROWSER-MOCK',
-    }),
+    enterGuestMode: async () => {
+      mockLicense = { ...mockLicenseBase, guestMode: true, deviceLabel: 'BROWSER-MOCK', appVersion: '0.1.8' }
+      return { ...mockLicense }
+    },
+    exitGuestMode: async () => {
+      mockLicense = { ...mockLicenseBase, guestMode: false, deviceLabel: 'BROWSER-MOCK', appVersion: '0.1.8' }
+      return { ...mockLicense }
+    },
     signOutAuth: async () => ({ ok: false, error: 'Not available in browser preview' }),
-    getAuthStatus: async () => ({
-      activated: false,
-      valid: false,
-      inGrace: false,
-      signedIn: false,
-      serverUrl: 'https://devtune.app',
-      appVersion: '0.1.0',
-    }),
+    getAuthStatus: async () => ({ ...mockLicense }),
     pollLicense: async () => {},
     checkUpdates: async () => ({
       ok: true,

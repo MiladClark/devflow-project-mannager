@@ -1,10 +1,19 @@
 import http from 'node:http'
 import { shell } from 'electron'
 import { randomBytes } from 'node:crypto'
+import { oauthCallbackHtml } from './oauth-callback-page'
 
 export type OAuthCallback = { code: string; state: string; expectedState: string }
 
 const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000
+
+function sendHtml(res: http.ServerResponse, html: string, status = 200) {
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+  })
+  res.end(html)
+}
 
 /** Start loopback server, open browser to DevTune connect page, wait for redirect. */
 export function runOAuthLoopback(serverUrl: string): Promise<OAuthCallback> {
@@ -23,32 +32,41 @@ export function runOAuthLoopback(serverUrl: string): Promise<OAuthCallback> {
       try {
         const url = new URL(req.url ?? '/', 'http://127.0.0.1')
         if (url.pathname !== '/callback') {
-          res.writeHead(404)
-          res.end()
+          sendHtml(res, oauthCallbackHtml('missing'), 404)
           return
         }
         const code = url.searchParams.get('code')
         const returnedState = url.searchParams.get('state')
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-        res.end(
-          '<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:48px">' +
-            '<h2>DevFlow authorized</h2><p>You can close this tab and return to DevFlow Manager.</p>' +
-            '</body></html>',
-        )
-        if (!settled && code && returnedState) {
-          if (returnedState !== expectedState) {
+
+        if (!code || !returnedState) {
+          sendHtml(res, oauthCallbackHtml('missing'), 400)
+          return
+        }
+
+        if (returnedState !== expectedState) {
+          sendHtml(res, oauthCallbackHtml('error'), 400)
+          if (!settled) {
             settled = true
             clearTimeout(timer)
             server.close()
             reject(new Error('Authorization state mismatch — try again.'))
-            return
           }
+          return
+        }
+
+        sendHtml(res, oauthCallbackHtml('success'), 200)
+        if (!settled) {
           settled = true
           clearTimeout(timer)
           server.close()
           resolve({ code, state: returnedState, expectedState })
         }
       } catch (err) {
+        try {
+          sendHtml(res, oauthCallbackHtml('error'), 500)
+        } catch {
+          /* ignore */
+        }
         if (!settled) {
           settled = true
           clearTimeout(timer)

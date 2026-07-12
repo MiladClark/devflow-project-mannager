@@ -214,9 +214,12 @@ export function BuildSetup() {
     if (!project) return
     if (detecting) return
     if (detection?.projectPath === project.path) return
+    // detectError is cleared by both selectProject (on a fresh attempt) and reset() (Start
+    // Over), so gating on it here stops the effect from retrying a failed detection forever
+    // while still re-running after Start Over or a route change to a different project.
+    if (detectError) return
     void selectProject(project.path)
-    // re-runs after Start Over (which clears detection) or when the route's :projectId changes
-  }, [project?.path, detection?.projectPath, detecting, selectProject])
+  }, [project?.path, detection?.projectPath, detecting, detectError, selectProject])
 
   const scoped = !!projectId
   const scopedStatus = detection && detection.projectPath === project?.path ? worstHealthStatus(detection.health) : null

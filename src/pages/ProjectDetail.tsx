@@ -5,6 +5,7 @@ import {
   Square,
   RotateCcw,
   Hammer,
+  Package,
   FolderOpen,
   ArrowLeft,
   ExternalLink,
@@ -19,6 +20,7 @@ import { AreaChart, Area, ResponsiveContainer, YAxis, Tooltip } from 'recharts'
 import { useApp } from '../state/store'
 import { api } from '../lib/ipc'
 import { notify } from '../state/notifications'
+import { useBuildNavigation } from '../lib/buildNav'
 import { FrameworkIcon } from '../components/FrameworkIcon'
 import { StatusBadge } from '../components/StatusBadge'
 import { LogViewer } from '../components/LogViewer'
@@ -32,6 +34,7 @@ import { TerminalTabs } from '../components/TerminalTabs'
 import { ScriptRunner } from '../components/ScriptRunner'
 import { ComposePanel } from '../components/ComposePanel'
 import { OpenInEditorButton } from '../components/OpenInEditorButton'
+import { EligibilityDialog } from '../components/build/EligibilityDialog'
 import type { PortOwner, StartResult, RunActionResult, BuildIssue } from '../shared/types'
 
 type Tab = 'logs' | 'monitor' | 'terminal' | 'git' | 'env' | 'health' | 'scripts' | 'stack' | 'settings'
@@ -57,6 +60,7 @@ export function ProjectDetail() {
   const [portConflict, setPortConflict] = useState<PortOwner | null>(null)
   const [buildIssue, setBuildIssue] = useState<BuildIssue | null>(null)
   const [installing, setInstalling] = useState(false)
+  const { openBuild, checkingId, dialog, closeDialog } = useBuildNavigation()
 
   const project = projects.find((p) => p.id === id)
   const rt = runtime[id] ?? { status: 'stopped' as const }
@@ -170,6 +174,13 @@ export function ProjectDetail() {
             </button>
           </>
         )}
+        <button
+          onClick={() => void openBuild(project)}
+          disabled={checkingId === project.id}
+          className="flex items-center gap-2 rounded-lg border border-edge px-4 py-2 text-sm text-slate-300 hover:border-accent/50 disabled:opacity-40"
+        >
+          <Package size={15} /> Build & Setup
+        </button>
         <OpenInEditorButton projectId={id} compact />
         <button
           onClick={() => api.openFolder(id)}
@@ -226,6 +237,7 @@ export function ProjectDetail() {
           )}
         </div>
       )}
+      {dialog && <EligibilityDialog project={dialog.project} eligibility={dialog.eligibility} onClose={closeDialog} />}
 
       <div className="flex gap-1 border-b border-edge">
         {tabs.map((t) => (

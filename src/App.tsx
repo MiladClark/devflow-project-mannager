@@ -14,6 +14,7 @@ import { AppsTools } from './pages/AppsTools'
 import { Account } from './pages/Account'
 import { Settings } from './pages/Settings'
 import { NewProject } from './pages/NewProject'
+import { BuildSetup } from './pages/BuildSetup'
 import { SystemHealth } from './pages/SystemHealth'
 import { LoginGate } from './components/LoginGate'
 import { OnboardingGate } from './components/OnboardingGate'
@@ -114,6 +115,8 @@ function Layout() {
               <Route path="/account" element={<Account />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/new" element={<NewProject />} />
+              <Route path="/build" element={<BuildSetup />} />
+              <Route path="/projects/:projectId/build" element={<BuildSetup />} />
             </Routes>
           </div>
         </main>

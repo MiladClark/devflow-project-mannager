@@ -47,6 +47,12 @@ import type {
   EditorStatus,
   ComposeStatus,
   ProxySetupStatus,
+  BuildConfig,
+  BuildDetection,
+  BuildPreflightResult,
+  BuildRunState,
+  BuildStageState,
+  BuildEligibility,
 } from '../shared/types'
 
 export interface Api {
@@ -186,6 +192,25 @@ export interface Api {
   onActivity(cb: (ev: ActivityEvent) => void): () => void
   onScaffoldLog(cb: (line: LogLine) => void): () => void
   onNavigate(cb: (route: string) => void): () => void
+  // build & setup
+  buildDetect(dir: string): Promise<BuildDetection | { error: string }>
+  buildGetConfig(projectPath: string): Promise<BuildConfig | null>
+  buildSaveConfig(config: BuildConfig): Promise<boolean>
+  buildResetConfig(projectPath: string): Promise<boolean>
+  buildComputeExclusions(dir: string): Promise<BuildDetection['exclusions']>
+  buildPreflight(config: BuildConfig): Promise<BuildPreflightResult>
+  buildStart(config: BuildConfig): Promise<{ ok: boolean; error?: string; buildId?: string }>
+  buildCancel(buildId: string): Promise<boolean>
+  buildRetryStage(buildId: string, stageId?: string): Promise<{ ok: boolean; error?: string; buildId?: string }>
+  buildGetState(buildId: string): Promise<BuildRunState | null>
+  buildOpenOutput(dir: string): Promise<void>
+  buildCopySummary(text: string): Promise<boolean>
+  buildRecentPaths(): Promise<string[]>
+  buildEligibility(projectPath: string): Promise<BuildEligibility>
+  buildEligibilityMany(projectPaths: string[]): Promise<Record<string, BuildEligibility>>
+  onBuildLog(cb: (buildId: string, line: LogLine) => void): () => void
+  onBuildStage(cb: (buildId: string, stage: BuildStageState) => void): () => void
+  onBuildState(cb: (state: BuildRunState) => void): () => void
 }
 
 declare global {
@@ -620,6 +645,56 @@ function createMockApi(): Api {
     onActivity: () => noopUnsub,
     onScaffoldLog: () => noopUnsub,
     onNavigate: () => noopUnsub,
+    buildDetect: async () => ({ error: 'Not available in browser preview' }),
+    buildGetConfig: async () => null,
+    buildSaveConfig: async () => false,
+    buildResetConfig: async () => false,
+    buildComputeExclusions: async () => [],
+    buildPreflight: async () => ({
+      ok: false,
+      errors: [{ id: 'unavailable', message: 'Not available in browser preview' }],
+      warnings: [],
+    }),
+    buildStart: async () => ({ ok: false, error: 'Not available in browser preview' }),
+    buildCancel: async () => false,
+    buildRetryStage: async () => ({ ok: false, error: 'Not available in browser preview' }),
+    buildGetState: async () => null,
+    buildOpenOutput: async () => {},
+    buildCopySummary: async () => false,
+    buildRecentPaths: async () => [],
+    buildEligibility: async (projectPath) => mockEligibilityFor(projects.find((p) => p.path === projectPath)),
+    buildEligibilityMany: async (projectPaths) => {
+      const out: Record<string, BuildEligibility> = {}
+      for (const p of projectPaths) out[p] = mockEligibilityFor(projects.find((x) => x.path === p))
+      return out
+    },
+    onBuildLog: () => noopUnsub,
+    onBuildStage: () => noopUnsub,
+    onBuildState: () => noopUnsub,
+  }
+}
+
+/** Derives a plausible eligibility badge from the mock project list, for browser-preview UI checks. */
+function mockEligibilityFor(project: Project | undefined): BuildEligibility {
+  if (!project) {
+    return { status: 'not-buildable', statusLabel: 'Not Buildable', framework: 'unknown', supportedTargets: [], reason: 'Project not found' }
+  }
+  if (!project.buildCommand) {
+    return {
+      status: 'config-missing',
+      statusLabel: 'Build Configuration Missing',
+      framework: project.framework,
+      supportedTargets: [],
+      reason: 'No supported build command was found in package.json.',
+    }
+  }
+  return {
+    status: 'ready',
+    statusLabel: 'Ready to Build',
+    framework: project.framework,
+    version: '0.1.0',
+    packageManager: project.packageManager,
+    supportedTargets: project.framework === 'electron' ? ['win-portable', 'win-nsis', 'win-zip'] : ['static-build', 'zip-archive'],
   }
 }
 

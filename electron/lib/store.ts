@@ -2,8 +2,10 @@ import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import type { Project, ActivityEvent, AppSettings, DbConnection, HealthSummary } from '../../src/shared/types'
+import type { Project, ActivityEvent, AppSettings, DbConnection, HealthSummary, BuildConfig } from '../../src/shared/types'
 import { healProjects } from './pathHeal'
+
+const MAX_RECENT_BUILD_PATHS = 10
 
 interface StoreData {
   projects: Project[]
@@ -11,6 +13,9 @@ interface StoreData {
   connections: DbConnection[]
   settings: AppSettings
   healthSummaries: Record<string, HealthSummary>
+  buildConfigs: Record<string, BuildConfig>
+  recentBuildPaths: string[]
+  lastBuildAt: Record<string, number>
 }
 
 const defaults = (): StoreData => ({
@@ -18,6 +23,9 @@ const defaults = (): StoreData => ({
   activity: [],
   connections: [],
   healthSummaries: {},
+  buildConfigs: {},
+  recentBuildPaths: [],
+  lastBuildAt: {},
   settings: {
     reservedPorts: [3000, 3001],
     defaultProjectsDir: path.join(app.getPath('home'), 'dev'),
@@ -151,6 +159,35 @@ export const store = {
     d.settings = { ...d.settings, ...patch }
     save()
     return d.settings
+  },
+  getBuildConfig(projectPath: string): BuildConfig | undefined {
+    return load().buildConfigs[projectPath]
+  },
+  saveBuildConfig(config: BuildConfig) {
+    load().buildConfigs[config.projectPath] = config
+    save()
+  },
+  resetBuildConfig(projectPath: string) {
+    delete load().buildConfigs[projectPath]
+    save()
+  },
+  getRecentBuildPaths(): string[] {
+    return load().recentBuildPaths
+  },
+  addRecentBuildPath(projectPath: string) {
+    const d = load()
+    d.recentBuildPaths = [projectPath, ...d.recentBuildPaths.filter((p) => p !== projectPath)].slice(
+      0,
+      MAX_RECENT_BUILD_PATHS,
+    )
+    save()
+  },
+  getLastBuildAt(projectPath: string): number | undefined {
+    return load().lastBuildAt[projectPath]
+  },
+  setLastBuildAt(projectPath: string, ts: number) {
+    load().lastBuildAt[projectPath] = ts
+    save()
   },
 }
 

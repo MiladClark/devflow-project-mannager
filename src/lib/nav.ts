@@ -8,6 +8,7 @@ import {
   KeyRound,
   Settings as SettingsIcon,
   Activity,
+  Package,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -31,6 +32,7 @@ export const NAV_GROUPS: NavGroup[] = [
     pages: [
       { label: 'Dashboard', to: '/', icon: LayoutDashboard },
       { label: 'Projects', to: '/projects', icon: FolderKanban },
+      { label: 'Build & Setup', to: '/build', icon: Package },
       { label: 'Logs', to: '/logs', icon: ScrollText },
     ],
   },

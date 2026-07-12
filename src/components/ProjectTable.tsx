@@ -1,16 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, Square, RotateCcw, ScrollText, Hammer, FolderOpen, Trash2, GitBranch } from 'lucide-react'
+import { Play, Square, RotateCcw, ScrollText, Hammer, Package, FolderOpen, Trash2, GitBranch } from 'lucide-react'
 import { useApp } from '../state/store'
 import { api } from '../lib/ipc'
 import { useGuestLock } from '../lib/guest'
+import { useBuildNavigation } from '../lib/buildNav'
 import { confirmAction } from '../state/confirm'
 import { FrameworkIcon } from './FrameworkIcon'
 import { StatusBadge } from './StatusBadge'
 import { PortConflict } from './PortConflict'
 import { HealthBadge } from './HealthBadge'
 import { OpenInEditorButton } from './OpenInEditorButton'
-import type { Project, PortOwner } from '../shared/types'
+import { EligibilityBadge } from './build/EligibilityBadge'
+import { EligibilityDialog } from './build/EligibilityDialog'
+import type { Project, PortOwner, BuildEligibility } from '../shared/types'
 
 function ActionBtn({
   title,
@@ -50,6 +53,21 @@ export function ProjectTable({ projects }: { projects: Project[] }) {
   const health = useApp((s) => s.health)
   const [conflicts, setConflicts] = useState<Record<string, PortOwner>>({})
   const [startErrors, setStartErrors] = useState<Record<string, string>>({})
+  const [eligibility, setEligibility] = useState<Record<string, BuildEligibility>>({})
+  const { openBuild, checkingId, dialog, closeDialog } = useBuildNavigation()
+
+  useEffect(() => {
+    let cancelled = false
+    if (projects.length === 0) return
+    api.buildEligibilityMany(projects.map((p) => p.path)).then((res) => {
+      if (!cancelled) setEligibility(res)
+    })
+    return () => {
+      cancelled = true
+    }
+    // re-check whenever the visible project set changes (paths are a stable proxy for identity here)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects.map((p) => p.path).join('|')])
 
   async function start(id: string) {
     setConflicts(({ [id]: _, ...rest }) => rest)
@@ -145,6 +163,9 @@ export function ProjectTable({ projects }: { projects: Project[] }) {
                     <StatusBadge status={rt.status} />
                     <HealthBadge summary={health[p.id]} />
                   </span>
+                  {eligibility[p.path] && (
+                    <EligibilityBadge status={eligibility[p.path].status} label={eligibility[p.path].statusLabel} size="sm" />
+                  )}
                 </td>
                 <td className="px-4 py-3.5 text-slate-300">{rt.port ?? (busy ? '...' : 'N/A')}</td>
                 <td className="px-4 py-3.5">
@@ -184,6 +205,16 @@ export function ProjectTable({ projects }: { projects: Project[] }) {
                       </>
                     )}
                     <ActionBtn
+                      title="Build & Setup"
+                      disabled={checkingId === p.id}
+                      onClick={() => {
+                        if (guardGuest()) return
+                        void openBuild(p)
+                      }}
+                    >
+                      <Package size={15} />
+                    </ActionBtn>
+                    <ActionBtn
                       title="Logs"
                       onClick={() => {
                         if (guardGuest()) return
@@ -219,6 +250,7 @@ export function ProjectTable({ projects }: { projects: Project[] }) {
           })}
         </tbody>
       </table>
+      {dialog && <EligibilityDialog project={dialog.project} eligibility={dialog.eligibility} onClose={closeDialog} />}
     </div>
   )
 }

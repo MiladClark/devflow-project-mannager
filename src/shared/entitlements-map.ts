@@ -19,6 +19,7 @@ export interface EnforcedEntitlements {
   apiAccess: boolean
   webhooks: boolean
   betaChannel: boolean
+  buildAndSetup: boolean
 }
 
 export const FREE_LIMITS: EnforcedEntitlements = {
@@ -40,6 +41,7 @@ export const FREE_LIMITS: EnforcedEntitlements = {
   apiAccess: false,
   webhooks: false,
   betaChannel: false,
+  buildAndSetup: false,
 }
 
 /** Signed-out browse mode — UI visible, all actions blocked until sign-in. */
@@ -62,6 +64,7 @@ export const GUEST_LIMITS: EnforcedEntitlements = {
   apiAccess: false,
   webhooks: false,
   betaChannel: false,
+  buildAndSetup: false,
 }
 
 function parseCount(
@@ -106,5 +109,9 @@ export function mapEntitlements(
     apiAccess: e.api_access === 'true',
     webhooks: e.webhooks === 'true',
     betaChannel: e.beta_channel === 'true',
+    // NOTE: requires the devtune-website entitlements map to add a `build_setup` key
+    // before any paid plan can unlock this — until then Build & Setup shows the
+    // upgrade prompt for everyone (same fail-closed behavior as any other unmapped key).
+    buildAndSetup: e.build_setup === 'true',
   }
 }

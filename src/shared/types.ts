@@ -549,3 +549,167 @@ export interface ApplyEnvResult {
   previous?: string
   error?: string
 }
+
+// ---- Build & Setup ----
+
+export type BuildTargetId = 'static-build' | 'zip-archive' | 'win-portable' | 'win-nsis' | 'win-zip'
+export type BuildHealthStatus = 'ready' | 'warning' | 'needs-attention' | 'blocked'
+
+export interface BuildHealthIssue {
+  id: string
+  status: BuildHealthStatus
+  title: string
+  detail: string
+  fixHint?: string
+}
+
+export interface BuildExclusionCandidate {
+  path: string
+  reason: string
+  approxBytes: number
+  approxSize: boolean
+  isDir: boolean
+  recommended: boolean
+}
+
+export interface BuildDetection {
+  projectPath: string
+  appName: string
+  packageName: string
+  version: string
+  framework: Framework
+  frameworks: string[]
+  packageManager: PackageManager
+  nodeVersion?: string
+  buildCommand: string
+  devCommand: string
+  outputDir: string
+  isElectron: boolean
+  electronVersion?: string
+  hasIconAsset: boolean
+  iconPath?: string
+  existingBuilderConfig: 'yaml' | 'json' | 'package-json' | null
+  health: BuildHealthIssue[]
+  exclusions: BuildExclusionCandidate[]
+  supportedTargets: BuildTargetId[]
+  disabledTargets: { id: BuildTargetId; reason: string }[]
+}
+
+export interface BuildConfig {
+  projectPath: string
+  framework: Framework
+  isElectron: boolean
+  iconPath?: string
+  electronVersion?: string
+  appName: string
+  packageName: string
+  version: string
+  versionSource: 'package' | 'manual' | 'increment'
+  incrementType?: 'patch' | 'minor' | 'major' | 'prerelease'
+  appId?: string
+  publisher?: string
+  buildCommand: string
+  preBuildCommand?: string
+  postBuildCommand?: string
+  packageManager: PackageManager
+  outputDir: string
+  cleanOutputDir: boolean
+  installDepsBeforeBuild: boolean
+  runTypeCheck: boolean
+  runLint: boolean
+  runTests: boolean
+  targets: BuildTargetId[]
+  excludedPaths: string[]
+  exportDir: string
+  namingTemplate: string
+}
+
+export type BuildStageId =
+  | 'validating'
+  | 'cleaning'
+  | 'installing'
+  | 'checks'
+  | 'building'
+  | 'packaging'
+  | 'installer'
+  | 'compressing'
+  | 'manifest'
+  | 'finalizing'
+export type BuildStageStatus = 'pending' | 'running' | 'complete' | 'warning' | 'failed' | 'skipped'
+
+export interface BuildStageState {
+  id: BuildStageId
+  label: string
+  status: BuildStageStatus
+  startedAt?: number
+  finishedAt?: number
+  command?: string
+  durationMs?: number
+}
+
+export interface BuildRunState {
+  buildId: string
+  projectPath: string
+  stages: BuildStageState[]
+  phase: 'running' | 'done' | 'error' | 'cancelled'
+  error?: string
+  outputDir?: string
+  files?: BuildOutputFile[]
+  manifestPath?: string
+}
+
+export interface BuildOutputFile {
+  name: string
+  path: string
+  sizeBytes: number
+  sha256: string
+}
+
+export interface BuildManifest {
+  appName: string
+  packageName: string
+  version: string
+  framework: string
+  platform: string
+  architecture: string
+  buildDate: string
+  buildCommand: string
+  installerType: string[]
+  outputFiles: string[]
+  outputDirectory: string
+  checksums: { sha256: Record<string, string> }
+}
+
+export interface BuildPreflightIssue {
+  id: string
+  message: string
+  why?: string
+  fix?: string
+}
+
+export interface BuildPreflightResult {
+  ok: boolean
+  errors: BuildPreflightIssue[]
+  warnings: BuildPreflightIssue[]
+}
+
+export interface BuildStartResult {
+  ok: boolean
+  error?: string
+  buildId?: string
+}
+
+export type BuildEligibilityStatus = 'ready' | 'needs-attention' | 'not-buildable' | 'config-missing'
+
+export interface BuildEligibility {
+  status: BuildEligibilityStatus
+  statusLabel: string
+  framework: Framework
+  version?: string
+  packageManager?: PackageManager
+  supportedTargets: BuildTargetId[]
+  reason?: string
+  detail?: string
+  fix?: string
+  lastBuildAt?: number
+}

@@ -17,6 +17,7 @@ import { registerTerminalHandlers } from './ipc/terminal'
 import { registerWindowHandlers, attachWindowStateEvents } from './ipc/window'
 import { registerComposeHandlers } from './ipc/compose'
 import { registerProxyHandlers } from './ipc/proxy'
+import { registerBuildHandlers } from './ipc/build'
 import { stopProxy } from './lib/proxy'
 import { disposeAll as disposeAllTerminals } from './lib/terminal'
 import { applyLoginItemSettings, autoStartProjects } from './lib/autostart'
@@ -132,6 +133,7 @@ app.whenReady().then(async () => {
   registerWindowHandlers()
   registerComposeHandlers()
   registerProxyHandlers()
+  registerBuildHandlers()
   createWindow()
   startStatsPolling()
   applyLoginItemSettings()

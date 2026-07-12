@@ -16,6 +16,7 @@ export interface Entitlements {
   autoStartProjects: boolean
   cloudBackup: boolean
   betaChannel: boolean
+  buildAndSetup: boolean
 }
 
 export const GUEST_ENTITLEMENTS: Entitlements = {
@@ -31,6 +32,7 @@ export const GUEST_ENTITLEMENTS: Entitlements = {
   autoStartProjects: GUEST_LIMITS.autoStartProjects,
   cloudBackup: GUEST_LIMITS.cloudBackup,
   betaChannel: GUEST_LIMITS.betaChannel,
+  buildAndSetup: GUEST_LIMITS.buildAndSetup,
 }
 
 export const FREE_ENTITLEMENTS: Entitlements = {
@@ -46,6 +48,7 @@ export const FREE_ENTITLEMENTS: Entitlements = {
   autoStartProjects: FREE_LIMITS.autoStartProjects,
   cloudBackup: FREE_LIMITS.cloudBackup,
   betaChannel: FREE_LIMITS.betaChannel,
+  buildAndSetup: FREE_LIMITS.buildAndSetup,
 }
 
 export function isGuestLicense(state: LicenseState | null | undefined): boolean {
@@ -69,6 +72,7 @@ export function deriveEntitlements(state: LicenseState | null): Entitlements {
     autoStartProjects: mapped.autoStartProjects,
     cloudBackup: mapped.cloudBackup,
     betaChannel: mapped.betaChannel,
+    buildAndSetup: mapped.buildAndSetup,
   }
 }
 

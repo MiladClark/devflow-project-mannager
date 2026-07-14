@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { ScaffoldOptions, ScaffoldResult } from '../../src/shared/types'
@@ -16,19 +16,132 @@ function log(text: string, stream: 'out' | 'err' | 'sys' = 'out') {
   broadcast('scaffold:log', { ts: Date.now(), stream, text })
 }
 
-function run(cmd: string, cwd: string): Promise<number> {
+const SCAFFOLD_TIMEOUT_MS = 20 * 60 * 1000
+
+let activeScaffoldChild: ChildProcess | null = null
+let scaffoldCancelled = false
+let scaffoldInProgress = false
+
+/** Matches common prompts from create-* CLIs (prompts, inquirer, etc.). */
+const INTERACTIVE_PROMPT_RE =
+  /\?\s+(?:Select|Add|Enable|Project name|Package name|Overwrite|Which|Choose|Pick)\b|Use arrow-keys|Return to submit/i
+
+function scaffoldEnv(): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    NO_COLOR: '1',
+    FORCE_COLOR: '0',
+    CI: 'true',
+    npm_config_yes: 'true',
+    npm_config_loglevel: 'info',
+    npm_config_progress: 'false',
+    npm_config_fund: 'false',
+    npm_config_audit: 'false',
+  }
+}
+
+function killScaffoldChild(child: ChildProcess) {
+  if (process.platform === 'win32' && child.pid) {
+    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { shell: true, windowsHide: true })
+  } else {
+    child.kill('SIGTERM')
+  }
+}
+
+function cleanupPartialProject(projectDir: string) {
+  if (!fs.existsSync(projectDir)) return
+  try {
+    fs.rmSync(projectDir, { recursive: true, force: true })
+    log(`Removed incomplete project folder: ${projectDir}`, 'sys')
+  } catch (err) {
+    log(`Could not remove folder: ${err instanceof Error ? err.message : String(err)}`, 'err')
+  }
+}
+
+function cancelActiveScaffold() {
+  scaffoldCancelled = true
+  if (activeScaffoldChild) killScaffoldChild(activeScaffoldChild)
+}
+
+function scaffoldWasCancelled(): boolean {
+  return scaffoldCancelled
+}
+
+function cancelledResult(): ScaffoldResult {
+  return { ok: false, error: 'Installation cancelled', cancelled: true }
+}
+
+function runFailure(code: number, interactiveError: string, exitError: string): ScaffoldResult | null {
+  if (scaffoldWasCancelled()) return cancelledResult()
+  if (code === 130) return { ok: false, error: interactiveError }
+  if (code !== 0) return { ok: false, error: exitError }
+  return null
+}
+
+function run(cmd: string, cwd: string, timeoutMs = SCAFFOLD_TIMEOUT_MS): Promise<number> {
   return new Promise((resolve, reject) => {
+    if (scaffoldWasCancelled()) {
+      resolve(130)
+      return
+    }
     log(`$ ${cmd}`, 'sys')
     const child = spawn(cmd, {
       cwd,
       shell: true,
       windowsHide: true,
-      env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', CI: 'true' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: scaffoldEnv(),
     })
-    child.stdout?.on('data', (c: Buffer) => log(c.toString().trim()))
-    child.stderr?.on('data', (c: Buffer) => log(c.toString().trim(), 'err'))
-    child.on('error', reject)
-    child.on('exit', (code) => resolve(code ?? 1))
+
+    activeScaffoldChild = child
+    let settled = false
+    let sawInteractivePrompt = false
+    const finish = (code: number) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (activeScaffoldChild === child) activeScaffoldChild = null
+      resolve(code)
+    }
+
+    const onChunk = (stream: 'out' | 'err') => (c: Buffer) => {
+      const text = c.toString()
+      for (const line of text.split(/\r?\n/)) {
+        const trimmed = line.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '').trim()
+        if (!trimmed) continue
+        log(trimmed, stream === 'err' ? 'err' : 'out')
+        if (INTERACTIVE_PROMPT_RE.test(trimmed)) {
+          sawInteractivePrompt = true
+          log(
+            'Interactive CLI prompt detected — aborting because DevFlow cannot answer terminal prompts.',
+            'err',
+          )
+          killScaffoldChild(child)
+          finish(130)
+        }
+      }
+    }
+
+    child.stdout?.on('data', onChunk('out'))
+    child.stderr?.on('data', onChunk('err'))
+    child.on('error', (err) => {
+      if (!settled) {
+        settled = true
+        clearTimeout(timer)
+        if (activeScaffoldChild === child) activeScaffoldChild = null
+        reject(err)
+      }
+    })
+    child.on('exit', (code) => {
+      if (scaffoldWasCancelled() || sawInteractivePrompt) finish(130)
+      else finish(code ?? 1)
+    })
+
+    const timer = setTimeout(() => {
+      log(`Command timed out after ${Math.round(timeoutMs / 60000)} minutes`, 'err')
+      killScaffoldChild(child)
+      finish(124)
+    }, timeoutMs)
   })
 }
 
@@ -317,23 +430,44 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
   }
   fs.mkdirSync(opts.parentDir, { recursive: true })
 
+  scaffoldCancelled = false
+  scaffoldInProgress = true
+  let imported = false
+
   try {
     if (opts.cms === 'payload') {
+      log('Stage 1/4: Scaffolding Payload CMS project...', 'sys')
       // Payload is a code-first CMS embedded in its own Next.js app (TypeScript only)
       const code = await run(
         `npx --yes create-payload-app@latest -n "${opts.name}" -t blank --db sqlite --use-npm -y`,
         opts.parentDir,
       )
-      if (code !== 0) return { ok: false, error: `create-payload-app exited with code ${code}` }
+      {
+        const fail = runFailure(
+          code,
+          'create-payload-app opened an interactive prompt. Update DevFlow or run the command manually.',
+          `create-payload-app exited with code ${code}`,
+        )
+        if (fail) return fail
+      }
     } else if (opts.cms === 'strapi') {
+      log('Stage 1/4: Scaffolding Strapi CMS project...', 'sys')
       // Strapi is a standalone headless CMS service (default port 1337)
       const lang = opts.typescript ? '--typescript' : '--javascript'
       const code = await run(
         `npx --yes create-strapi-app@latest "${opts.name}" --quickstart --no-run --skip-cloud --use-npm ${lang}`,
         opts.parentDir,
       )
-      if (code !== 0) return { ok: false, error: `create-strapi-app exited with code ${code}` }
+      {
+        const fail = runFailure(
+          code,
+          'create-strapi-app opened an interactive prompt. Update DevFlow or run the command manually.',
+          `create-strapi-app exited with code ${code}`,
+        )
+        if (fail) return fail
+      }
     } else if (opts.framework === 'next') {
+      log('Stage 1/4: Scaffolding Next.js project...', 'sys')
       const flags = [
         opts.typescript ? '--typescript' : '--javascript',
         opts.tailwind ? '--tailwind' : '--no-tailwind',
@@ -345,20 +479,46 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
         '--yes',
       ].join(' ')
       const code = await run(`npx --yes create-next-app@latest "${opts.name}" ${flags}`, opts.parentDir)
-      if (code !== 0) return { ok: false, error: `create-next-app exited with code ${code}` }
+      {
+        const fail = runFailure(
+          code,
+          'create-next-app opened an interactive prompt. Update DevFlow or run the command manually.',
+          `create-next-app exited with code ${code}`,
+        )
+        if (fail) return fail
+      }
     } else if (opts.framework === 'electron') {
+      log('Stage 1/4: Scaffolding Electron project...', 'sys')
       const template = opts.typescript ? 'react-ts' : 'react'
+      // npm create passes flags reliably; --skip disables updater/mirror prompts.
       let code = await run(
-        `npx --yes @quick-start/create-electron@latest "${opts.name}" -- --template ${template}`,
+        `npm create @quick-start/electron@latest "${opts.name}" -- --template ${template} --skip`,
         opts.parentDir,
       )
-      if (code !== 0) return { ok: false, error: `create-electron exited with code ${code}` }
+      {
+        const fail = runFailure(
+          code,
+          'create-electron opened an interactive prompt (framework/updater/mirror). Update DevFlow or run: npm create @quick-start/electron@latest <name> -- --template react-ts --skip',
+          `create-electron exited with code ${code}`,
+        )
+        if (fail) return fail
+      }
+      log('Stage 2/4: Installing dependencies...', 'sys')
+      code = await run('npm install', projectDir)
+      {
+        const fail = runFailure(code, 'npm install was interrupted.', `npm install exited with code ${code}`)
+        if (fail) return fail
+      }
       if (opts.tailwind) {
         code = await run('npm install tailwindcss @tailwindcss/vite', projectDir)
-        if (code !== 0) return { ok: false, error: `tailwind install exited with code ${code}` }
+        {
+          const fail = runFailure(code, 'tailwind install was interrupted.', `tailwind install exited with code ${code}`)
+          if (fail) return fail
+        }
         addTailwindToElectron(projectDir)
       }
     } else {
+      log('Stage 1/4: Scaffolding Vite project...', 'sys')
       const template =
         opts.framework === 'vite-react'
           ? opts.typescript ? 'react-ts' : 'react'
@@ -366,35 +526,64 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
             ? opts.typescript ? 'vue-ts' : 'vue'
             : opts.typescript ? 'vanilla-ts' : 'vanilla'
       let code = await run(`npm create vite@latest "${opts.name}" -- --template ${template}`, opts.parentDir)
-      if (code !== 0) return { ok: false, error: `create-vite exited with code ${code}` }
+      {
+        const fail = runFailure(
+          code,
+          'create-vite opened an interactive prompt. Update DevFlow or run the command manually.',
+          `create-vite exited with code ${code}`,
+        )
+        if (fail) return fail
+      }
+      log('Stage 2/4: Installing dependencies...', 'sys')
       code = await run('npm install', projectDir)
-      if (code !== 0) return { ok: false, error: `npm install exited with code ${code}` }
+      {
+        const fail = runFailure(code, 'npm install was interrupted.', `npm install exited with code ${code}`)
+        if (fail) return fail
+      }
       if (opts.tailwind) {
         code = await run('npm install tailwindcss @tailwindcss/vite', projectDir)
-        if (code !== 0) return { ok: false, error: `tailwind install exited with code ${code}` }
+        {
+          const fail = runFailure(code, 'tailwind install was interrupted.', `tailwind install exited with code ${code}`)
+          if (fail) return fail
+        }
         addTailwindToVite(projectDir)
       }
     }
     if (opts.cms === 'decap') {
+      log('Stage 3/4: Adding Decap CMS files...', 'sys')
       addDecapCms(projectDir, opts.framework)
     }
 
+    log('Stage 3/4: Installing add-ons...', 'sys')
     const pluginErr = await applyPlugins(projectDir, opts)
     if (pluginErr) return { ok: false, error: pluginErr }
+    if (scaffoldWasCancelled()) return cancelledResult()
   } catch (err) {
+    if (scaffoldWasCancelled()) return cancelledResult()
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    scaffoldInProgress = false
+    activeScaffoldChild = null
+    if (scaffoldWasCancelled() && !imported) cleanupPartialProject(projectDir)
   }
 
-  log('Importing project...', 'sys')
-  const imported = importProjectFromPath(projectDir)
-  if (!imported.ok || !imported.project) return { ok: false, error: imported.error }
+  log('Stage 4/4: Importing project into DevFlow...', 'sys')
+  const importResult = importProjectFromPath(projectDir)
+  if (!importResult.ok || !importResult.project) return { ok: false, error: importResult.error }
+  imported = true
   if (opts.preferredPort) {
-    store.updateProject(imported.project.id, { preferredPort: opts.preferredPort })
+    store.updateProject(importResult.project.id, { preferredPort: opts.preferredPort })
   }
   log('Done.', 'sys')
-  return { ok: true, project: store.getProject(imported.project.id) }
+  return { ok: true, project: store.getProject(importResult.project.id) }
 }
 
 export function registerScaffoldHandlers() {
   ipcMain.handle('scaffold:create', (_e, opts: ScaffoldOptions) => scaffold(opts))
+  ipcMain.handle('scaffold:cancel', () => {
+    if (!scaffoldInProgress) return { ok: false }
+    log('Installation cancelled by user.', 'sys')
+    cancelActiveScaffold()
+    return { ok: true }
+  })
 }

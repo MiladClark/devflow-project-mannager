@@ -4,7 +4,6 @@ import {
   Play,
   Square,
   RotateCcw,
-  Hammer,
   Package,
   FolderOpen,
   ArrowLeft,
@@ -164,13 +163,6 @@ export function ProjectDetail() {
               className="flex items-center gap-2 rounded-lg bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/25 disabled:opacity-40"
             >
               <Play size={15} /> Start
-            </button>
-            <button
-              onClick={() => act(() => api.buildProject(id))}
-              disabled={!project.buildCommand}
-              className="flex items-center gap-2 rounded-lg bg-accent/15 px-4 py-2 text-sm font-semibold text-accent hover:bg-accent/25 disabled:opacity-40"
-            >
-              <Hammer size={15} /> Build
             </button>
           </>
         )}

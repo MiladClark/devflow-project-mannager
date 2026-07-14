@@ -365,6 +365,7 @@ export interface ScaffoldResult {
   ok: boolean
   project?: Project
   error?: string
+  cancelled?: boolean
 }
 
 export interface DockerStatus {

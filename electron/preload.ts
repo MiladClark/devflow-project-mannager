@@ -34,6 +34,7 @@ const api = {
   clearLogs: (id: string) => ipcRenderer.invoke('runner:clearLogs', id),
   // scaffold
   createProject: (opts: unknown) => ipcRenderer.invoke('scaffold:create', opts),
+  cancelProjectCreation: () => ipcRenderer.invoke('scaffold:cancel'),
   // ports / settings / activity
   checkPort: (port: number, excludeProjectId?: string) => ipcRenderer.invoke('ports:check', port, excludeProjectId),
   getPortOwner: (port: number) => ipcRenderer.invoke('ports:owner', port),

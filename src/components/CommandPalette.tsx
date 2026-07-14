@@ -4,7 +4,7 @@ import {
   Play,
   Square,
   RotateCcw,
-  Hammer,
+  Package,
   FolderOpen,
   Plus,
   RefreshCw,
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '../state/store'
 import { useGuestLock } from '../lib/guest'
+import { useBuildNavigation } from '../lib/buildNav'
 import { api } from '../lib/ipc'
 import { PAGES } from '../lib/nav'
 import { THEMES, applyTheme, getThemeChoice } from '../lib/theme'
@@ -33,6 +34,7 @@ interface Command {
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate()
   const { guardGuest } = useGuestLock()
+  const { openBuild } = useBuildNavigation()
   const { projects, runtime } = useApp()
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
@@ -75,14 +77,16 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             icon: <Play size={14} />,
             perform: () => api.startProject(p.id),
           })
-        if (p.buildCommand)
-          cmds.push({
-            key: `build-${p.id}`,
-            group: 'Actions',
-            label: `Build ${p.name}`,
-            icon: <Hammer size={14} />,
-            perform: () => api.buildProject(p.id),
-          })
+        cmds.push({
+          key: `build-setup-${p.id}`,
+          group: 'Actions',
+          label: `Build & Setup ${p.name}`,
+          icon: <Package size={14} />,
+          perform: () => {
+            if (guardGuest()) return
+            void openBuild(p)
+          },
+        })
       }
       cmds.push({
         key: `folder-${p.id}`,

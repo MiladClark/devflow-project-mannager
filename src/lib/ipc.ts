@@ -80,6 +80,7 @@ export interface Api {
   getLogs(id: string): Promise<LogLine[]>
   clearLogs(id: string): Promise<boolean>
   createProject(opts: ScaffoldOptions): Promise<ScaffoldResult>
+  cancelProjectCreation(): Promise<{ ok: boolean }>
   checkPort(port: number, excludeProjectId?: string): Promise<PortCheck>
   getPortOwner(port: number): Promise<PortOwner | null>
   takeoverPort(port: number, opts?: { skipConfirm?: boolean }): Promise<{ ok: boolean; error?: string }>
@@ -346,6 +347,7 @@ function createMockApi(): Api {
     ],
     clearLogs: async () => true,
     createProject: async () => ({ ok: false, error: 'Not available in browser preview' }),
+    cancelProjectCreation: async () => ({ ok: false }),
     checkPort: async (port) => ({ port, free: port !== 3000, reserved: port === 3000 || port === 3001 }),
     getPortOwner: async (port) =>
       port === 3000

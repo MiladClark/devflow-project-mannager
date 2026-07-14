@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, Square, RotateCcw, ScrollText, Hammer, Package, FolderOpen, Trash2, GitBranch } from 'lucide-react'
+import { Play, Square, RotateCcw, ScrollText, Package, FolderOpen, Trash2, GitBranch } from 'lucide-react'
 import { useApp } from '../state/store'
 import { api } from '../lib/ipc'
 import { useGuestLock } from '../lib/guest'
@@ -76,14 +76,6 @@ export function ProjectTable({ projects }: { projects: Project[] }) {
     if (!res.ok) {
       if (res.portConflict) setConflicts((c) => ({ ...c, [id]: res.portConflict! }))
       else if (res.error) setStartErrors((e) => ({ ...e, [id]: res.error! }))
-    }
-  }
-
-  async function build(id: string) {
-    const res = await api.buildProject(id)
-    // detailed issue resolution lives on the project detail page — nudge the user there
-    if (!res.ok && res.error) {
-      setStartErrors((e) => ({ ...e, [id]: res.issue ? `${res.error} Open the project to fix it.` : res.error! }))
     }
   }
 
@@ -198,9 +190,6 @@ export function ProjectTable({ projects }: { projects: Project[] }) {
                       <>
                         <ActionBtn title="Start" onClick={() => start(p.id)} disabled={!p.runCommand}>
                           <Play size={15} />
-                        </ActionBtn>
-                        <ActionBtn title="Build" onClick={() => build(p.id)} disabled={!p.buildCommand}>
-                          <Hammer size={15} />
                         </ActionBtn>
                       </>
                     )}

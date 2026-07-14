@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Check, FolderOpen, Loader2, Lock } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, FolderOpen, Loader2, Lock, X } from 'lucide-react'
 import { api } from '../lib/ipc'
 import { useApp } from '../state/store'
 import { useEntitlements } from '../lib/entitlements'
@@ -100,6 +100,7 @@ export function NewProject() {
   }, [port])
 
   const [installing, setInstalling] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const [installLog, setInstallLog] = useState<LogLine[]>([])
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
@@ -116,6 +117,7 @@ export function NewProject() {
 
   async function install() {
     setInstalling(true)
+    setCancelling(false)
     setError('')
     setInstallLog([])
     const res = await api.createProject({
@@ -129,15 +131,25 @@ export function NewProject() {
       preferredPort: port ? Number(port) : undefined,
     })
     setInstalling(false)
+    setCancelling(false)
     if (res.ok && res.project) {
       doneProjectId.current = res.project.id
       setDone(true)
       await refreshProjects()
       notify('success', 'Project created', `${res.project.name} is ready`, `/projects/${res.project.id}`)
+    } else if (res.cancelled) {
+      setError('')
+      notify('info', 'Installation cancelled', 'You can adjust settings and try again.')
     } else {
       setError(res.error ?? 'Unknown error')
       notify('error', 'Project creation failed', res.error)
     }
+  }
+
+  async function cancelInstall() {
+    if (!installing || cancelling) return
+    setCancelling(true)
+    await api.cancelProjectCreation()
   }
 
   return (
@@ -430,13 +442,25 @@ export function NewProject() {
       )}
 
       <div className="flex justify-between border-t border-edge pt-4">
-        <button
-          onClick={() => setStep(Math.max(0, step - 1))}
-          disabled={step === 0 || installing}
-          className="rounded-lg border border-edge px-4 py-2 text-sm text-slate-300 hover:border-accent/50 disabled:opacity-30"
-        >
-          ‹ Back
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setStep(Math.max(0, step - 1))}
+            disabled={step === 0 || installing}
+            className="rounded-lg border border-edge px-4 py-2 text-sm text-slate-300 hover:border-accent/50 disabled:opacity-30"
+          >
+            ‹ Back
+          </button>
+          {installing && (
+            <button
+              onClick={() => void cancelInstall()}
+              disabled={cancelling}
+              className="flex items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
+            >
+              {cancelling ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+              {cancelling ? 'Cancelling...' : 'Cancel'}
+            </button>
+          )}
+        </div>
         {step < 2 ? (
           <button
             onClick={() => setStep(step + 1)}

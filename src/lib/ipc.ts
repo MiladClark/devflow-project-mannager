@@ -8,6 +8,7 @@ import type {
   DevProcessCategory,
   ProjectStats,
   PortCheck,
+  PortStatusOverview,
   AppSettings,
   ScaffoldOptions,
   ScaffoldResult,
@@ -83,6 +84,7 @@ export interface Api {
   cancelProjectCreation(): Promise<{ ok: boolean }>
   checkPort(port: number, excludeProjectId?: string): Promise<PortCheck>
   getPortOwner(port: number): Promise<PortOwner | null>
+  getPortStatus(): Promise<PortStatusOverview>
   takeoverPort(port: number, opts?: { skipConfirm?: boolean }): Promise<{ ok: boolean; error?: string }>
   exportBackup(opts: { includePasswords: boolean }): Promise<{ ok: boolean; file?: string; error?: string }>
   importBackup(opts: { mode: 'merge' | 'replace' }): Promise<BackupImportResult>
@@ -353,6 +355,13 @@ function createMockApi(): Api {
       port === 3000
         ? { port, pid: 4242, processName: 'node.exe', killable: true }
         : null,
+    getPortStatus: async () => ({
+      reserved: [3000, 3001],
+      occupied: [
+        { port: 3000, pid: 4242, processName: 'node.exe', managedProjectName: 'vite-portfolio' },
+        { port: 5432, pid: 9001, processName: 'postgres.exe' },
+      ],
+    }),
     takeoverPort: async () => ({ ok: false, error: 'Not available in browser preview' }),
     exportBackup: async () => ({ ok: false, error: 'Not available in browser preview' }),
     importBackup: async () => ({

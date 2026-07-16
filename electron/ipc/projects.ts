@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { Project } from '../../src/shared/types'
 import { store } from '../lib/store'
 import { detectProject } from '../lib/detect'
-import { checkPort } from '../lib/ports'
+import { checkPort, getPortStatusOverview } from '../lib/ports'
 import { getPortOwner, takeoverPort } from '../lib/portOwner'
 import { getEnforcedEntitlements, isGuestAccess, GUEST_ACTION_ERROR } from '../lib/licensing'
 import { applyLoginItemSettings } from '../lib/autostart'
@@ -130,6 +130,7 @@ export function registerProjectHandlers() {
   })
 
   ipcMain.handle('ports:check', (_e, port: number, excludeProjectId?: string) => checkPort(port, excludeProjectId))
+  ipcMain.handle('ports:status', () => getPortStatusOverview())
   ipcMain.handle('ports:owner', (_e, port: number) => getPortOwner(port))
   ipcMain.handle('ports:takeover', (_e, port: number, opts?: { skipConfirm?: boolean }) => takeoverPort(port, opts))
 

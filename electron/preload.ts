@@ -38,6 +38,7 @@ const api = {
   // ports / settings / activity
   checkPort: (port: number, excludeProjectId?: string) => ipcRenderer.invoke('ports:check', port, excludeProjectId),
   getPortOwner: (port: number) => ipcRenderer.invoke('ports:owner', port),
+  getPortStatus: () => ipcRenderer.invoke('ports:status'),
   takeoverPort: (port: number, opts?: { skipConfirm?: boolean }) => ipcRenderer.invoke('ports:takeover', port, opts),
   exportBackup: (opts: unknown) => ipcRenderer.invoke('backup:export', opts),
   importBackup: (opts: unknown) => ipcRenderer.invoke('backup:import', opts),

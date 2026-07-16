@@ -1,6 +1,7 @@
 import net from 'node:net'
-import type { PortCheck } from '../../src/shared/types'
+import type { PortCheck, PortStatusOverview } from '../../src/shared/types'
 import { store } from './store'
+import { listOccupiedPorts } from './portOwner'
 
 function probe(port: number, host: string): Promise<boolean> {
   return new Promise((resolve) => {
@@ -27,4 +28,13 @@ export async function checkPort(port: number, excludeProjectId?: string): Promis
     .find((p) => p.id !== excludeProjectId && (p.preferredPort ?? p.defaultPort) === port)
   const free = await isPortFree(port)
   return { port, free, reserved, usedByProject: owner?.name }
+}
+
+export async function getPortStatusOverview(): Promise<PortStatusOverview> {
+  const settings = store.getSettings()
+  const occupied = await listOccupiedPorts()
+  return {
+    reserved: [...settings.reservedPorts].sort((a, b) => a - b),
+    occupied,
+  }
 }

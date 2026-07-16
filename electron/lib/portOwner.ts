@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import type { PortOwner } from '../../src/shared/types'
+import type { PortOwner, OccupiedPortInfo } from '../../src/shared/types'
 import { store } from './store'
 import { findOwningRoots } from './stats'
 import { isPortFree } from './ports'
@@ -28,19 +28,29 @@ function run(cmd: string, args: string[]): Promise<string> {
 
 /** PIDs of processes LISTENING on the given TCP port (any interface). */
 async function listeningPids(port: number): Promise<number[]> {
+  const map = await listeningPortMap()
+  const pid = map.get(port)
+  return pid !== undefined ? [pid] : []
+}
+
+/** All TCP ports in LISTENING state → first PID bound to each port. */
+async function listeningPortMap(): Promise<Map<number, number>> {
   const out = await run('netstat', ['-ano', '-p', 'TCP'])
-  const pids = new Set<number>()
+  const portToPid = new Map<number, number>()
   for (const line of out.split(/\r?\n/)) {
     if (!/LISTENING/i.test(line)) continue
-    // "  TCP    0.0.0.0:3007    0.0.0.0:0    LISTENING    12345"
     const cols = line.trim().split(/\s+/)
     if (cols.length < 5) continue
     const local = cols[1]
-    if (!local.endsWith(`:${port}`)) continue
+    const m = local.match(/:(\d+)$/)
+    if (!m) continue
+    const port = Number(m[1])
     const pid = Number(cols[cols.length - 1])
-    if (Number.isInteger(pid) && pid > 0) pids.add(pid)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) continue
+    if (!Number.isInteger(pid) || pid <= 0) continue
+    if (!portToPid.has(port)) portToPid.set(port, pid)
   }
-  return [...pids]
+  return portToPid
 }
 
 async function processName(pid: number): Promise<string> {
@@ -91,6 +101,44 @@ export async function getPortOwner(port: number): Promise<PortOwner | null> {
     killable,
     reason,
   }
+}
+
+export async function listOccupiedPorts(): Promise<OccupiedPortInfo[]> {
+  const portToPid = await listeningPortMap()
+  if (portToPid.size === 0) return []
+
+  const uniquePids = [...new Set(portToPid.values())]
+  const names = new Map<number, string>()
+  await Promise.all(
+    uniquePids.map(async (pid) => {
+      names.set(pid, await processName(pid))
+    }),
+  )
+
+  const { getRunningDevPids } = await import('../ipc/runner')
+  const devPids = getRunningDevPids()
+  const roots = await findOwningRoots(uniquePids, [...devPids.values()])
+
+  const result: OccupiedPortInfo[] = []
+  for (const [port, pid] of portToPid) {
+    let managedProjectName: string | undefined
+    const rootPid = roots.get(pid)
+    if (rootPid !== undefined) {
+      for (const [projectId, p] of devPids) {
+        if (p === rootPid) {
+          managedProjectName = store.getProject(projectId)?.name
+          break
+        }
+      }
+    }
+    result.push({
+      port,
+      pid,
+      processName: names.get(pid) ?? 'unknown',
+      managedProjectName,
+    })
+  }
+  return result.sort((a, b) => a.port - b.port)
 }
 
 export async function takeoverPort(

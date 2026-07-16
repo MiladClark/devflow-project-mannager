@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Save, Plus, X, Moon, Sun, Check, Download, Upload, Loader2, Shield } from 'lucide-react'
+import { Save, Plus, X, Moon, Sun, Check, Download, Upload, Loader2, Shield, RefreshCw } from 'lucide-react'
 import { useApp } from '../state/store'
 import { notify } from '../state/notifications'
 import { confirmAction } from '../state/confirm'
@@ -7,7 +7,7 @@ import { api, isElectron } from '../lib/ipc'
 import { THEMES, applyTheme, getThemeChoice, type ThemeMode } from '../lib/theme'
 import { FONTS, applyFont, getFontId } from '../lib/font'
 import { Switch, SwitchField } from '../components/Switch'
-import type { PreferredEditor, PreferredNodeManager, ProxySetupStatus } from '../shared/types'
+import type { PreferredEditor, PreferredNodeManager, ProxySetupStatus, PortStatusOverview } from '../shared/types'
 
 function SettingsSection({
   title,
@@ -473,7 +473,29 @@ export function Settings() {
   const [dir, setDir] = useState(settings?.defaultProjectsDir ?? '')
   const [reserved, setReserved] = useState<number[]>(settings?.reservedPorts ?? [])
   const [newPort, setNewPort] = useState('')
+  const [pickPort, setPickPort] = useState('')
+  const [portStatus, setPortStatus] = useState<PortStatusOverview | null>(null)
+  const [portStatusLoading, setPortStatusLoading] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    setDir(settings?.defaultProjectsDir ?? '')
+    setReserved(settings?.reservedPorts ?? [])
+  }, [settings])
+
+  async function refreshPortStatus() {
+    if (!isElectron) return
+    setPortStatusLoading(true)
+    try {
+      setPortStatus(await api.getPortStatus())
+    } finally {
+      setPortStatusLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void refreshPortStatus()
+  }, [])
 
   async function save() {
     const updated = await api.updateSettings({ defaultProjectsDir: dir, reservedPorts: reserved })
@@ -489,6 +511,15 @@ export function Settings() {
     }
     setNewPort('')
   }
+
+  function onPickPort(value: string) {
+    setPickPort(value)
+    if (!value) return
+    setNewPort(value)
+  }
+
+  const occupiedNotReserved =
+    portStatus?.occupied.filter((o) => !reserved.includes(o.port)) ?? []
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-6 pb-12">
@@ -548,6 +579,62 @@ export function Settings() {
               </span>
             ))}
             {reserved.length === 0 && <span className="text-sm text-slate-600">No reserved ports.</span>}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <label className="text-[11px] font-medium text-slate-500">Occupied &amp; reserved ports</label>
+              <div className="flex gap-2">
+                <select
+                  value={pickPort}
+                  onChange={(e) => onPickPort(e.target.value)}
+                  disabled={portStatusLoading || !isElectron}
+                  className="min-w-0 flex-1 rounded-lg border border-edge bg-bg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-accent/60 disabled:opacity-50"
+                >
+                  <option value="">
+                    {portStatusLoading ? 'Scanning ports…' : 'Select a port…'}
+                  </option>
+                  {occupiedNotReserved.length > 0 && (
+                    <optgroup label="Occupied (listening)">
+                      {occupiedNotReserved.map((o) => (
+                        <option key={`occ-${o.port}`} value={String(o.port)}>
+                          {o.port} — {o.processName}
+                          {o.managedProjectName ? ` (${o.managedProjectName})` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {reserved.length > 0 && (
+                    <optgroup label="Reserved (rules)">
+                      {reserved.map((p) => (
+                        <option key={`res-${p}`} value={String(p)}>
+                          {p} — reserved
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {!portStatusLoading &&
+                    isElectron &&
+                    occupiedNotReserved.length === 0 &&
+                    reserved.length === 0 && (
+                      <option value="" disabled>
+                        No occupied or reserved ports found
+                      </option>
+                    )}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void refreshPortStatus()}
+                  disabled={portStatusLoading || !isElectron}
+                  title="Refresh port list"
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-edge px-3 py-2.5 text-slate-400 hover:border-accent/50 hover:text-accent disabled:opacity-40"
+                >
+                  <RefreshCw size={15} className={portStatusLoading ? 'animate-spin' : ''} />
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-600">
+                Pick an occupied port to pre-fill the rule below, or refresh to rescan listeners.
+              </p>
+            </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input

@@ -132,6 +132,18 @@ export interface PortCheck {
   usedByProject?: string
 }
 
+export interface OccupiedPortInfo {
+  port: number
+  pid: number
+  processName: string
+  managedProjectName?: string
+}
+
+export interface PortStatusOverview {
+  reserved: number[]
+  occupied: OccupiedPortInfo[]
+}
+
 export interface AppSettings {
   reservedPorts: number[]
   defaultProjectsDir: string

@@ -68,6 +68,12 @@ win:
   signAndEditExecutable: false
   target:
     - dir
+    - nsis
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
 mac:
   icon: build/icon.icns
   target:

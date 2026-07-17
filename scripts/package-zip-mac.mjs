@@ -6,7 +6,7 @@
  * both platforms uniformly (version, fileName, sha256, sizeBytes, releasedAt, zipPath).
  *
  * Usage:
- *   node scripts/package-zip-mac.mjs [--arch x64|arm64] [--out-dir path]
+ *   node scripts/package-zip-mac.mjs [--arch x64|arm64] [--out-dir path] [--platform macos-arm64|macos-x64]
  */
 import { createHash } from 'node:crypto'
 import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -24,6 +24,12 @@ function arg(name, fallback) {
 
 const arch = arg('--arch', process.arch)
 const outDir = path.resolve(arg('--out-dir', releaseDir))
+// Must be the CI matrix's distinct per-arch id ('macos-arm64'/'macos-x64'),
+// not a shared 'macos' — the website's releases table has no separate arch
+// column, so a shared platform value would let one arch's registration
+// silently overwrite the other's via the (product,version,platform) unique
+// constraint, and the website's ALLOWED_PLATFORMS rejects 'macos' outright.
+const platform = arg('--platform', arch === 'arm64' ? 'macos-arm64' : 'macos-x64')
 
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
 const version = pkg.version
@@ -52,7 +58,7 @@ const manifest = {
   sizeBytes: size,
   releasedAt: new Date().toISOString(),
   zipPath,
-  platform: 'macos',
+  platform,
   arch,
 }
 

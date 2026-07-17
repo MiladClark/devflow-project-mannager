@@ -9,7 +9,7 @@
  *   node scripts/package-zip-mac.mjs [--arch x64|arm64] [--out-dir path] [--platform macos-arm64|macos-x64]
  */
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -37,7 +37,12 @@ const fileName = `${pkg.name}-${version}-${arch}.zip`
 const zipPath = path.join(releaseDir, fileName)
 
 if (!existsSync(zipPath)) {
-  console.error(`Missing built zip: ${zipPath} — run electron-builder --mac --${arch} first.`)
+  // console.error() alone only surfaces as a generic "exit code 1" in GitHub's
+  // public annotations API (no gh CLI/auth available to pull full job logs
+  // here) — the ::error:: workflow command makes the actual mismatch visible
+  // there too, not just in the raw log.
+  const actual = existsSync(releaseDir) ? readdirSync(releaseDir).join(', ') || '(empty)' : '(release dir does not exist)'
+  console.log(`::error::Missing built zip: ${zipPath}. Contents of ${releaseDir}: ${actual}`)
   process.exit(1)
 }
 

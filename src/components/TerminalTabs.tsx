@@ -11,6 +11,9 @@ const SHELL_LABEL: Record<TermShell, string> = {
   powershell: 'PowerShell',
   gitbash: 'Git Bash',
   cmd: 'CMD',
+  zsh: 'zsh',
+  bash: 'bash',
+  sh: 'sh',
 }
 
 export function TerminalTabs({ projectId, cwd }: { projectId: string; cwd: string }) {

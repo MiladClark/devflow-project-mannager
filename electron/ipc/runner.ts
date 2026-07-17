@@ -106,6 +106,31 @@ async function applyRunningUrl(projectId: string, port: number, p: Project) {
 }
 
 function killTree(pid: number): Promise<void> {
+  if (process.platform === 'darwin') {
+    return new Promise((resolve) => {
+      try {
+        process.kill(-pid, 'SIGTERM')
+      } catch {
+        try {
+          process.kill(pid, 'SIGTERM')
+        } catch {
+          /* already gone */
+        }
+      }
+      setTimeout(() => {
+        try {
+          process.kill(-pid, 'SIGKILL')
+        } catch {
+          try {
+            process.kill(pid, 'SIGKILL')
+          } catch {
+            /* already gone */
+          }
+        }
+        resolve()
+      }, 300)
+    })
+  }
   return new Promise((resolve) => {
     execFile('taskkill', ['/pid', String(pid), '/t', '/f'], { windowsHide: true }, () => resolve())
   })

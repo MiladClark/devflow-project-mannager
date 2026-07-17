@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import type { DbService, DbKind, ServiceState } from '../../src/shared/types'
 import { VERSION_RE } from './tools'
 
@@ -20,6 +21,15 @@ function powershell(command: string, timeoutMs = 15000): Promise<{ code: number 
         resolve({ code, stdout: stdout ?? '', stderr: stderr ?? '' })
       },
     )
+  })
+}
+
+function brew(args: string[], timeoutMs = 15000): Promise<{ code: number | string; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    execFile('brew', args, { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
+      const code = err ? ((err as NodeJS.ErrnoException).code ?? 1) : 0
+      resolve({ code, stdout: stdout ?? '', stderr: stderr ?? '' })
+    })
   })
 }
 
@@ -61,7 +71,7 @@ async function versionFromBinary(exe: string | undefined): Promise<string | unde
   return res.out.match(VERSION_RE)?.[0]
 }
 
-export async function listDbServices(): Promise<DbService[]> {
+async function listDbServicesWin32(): Promise<DbService[]> {
   const res = await powershell(
     `Get-CimInstance Win32_Service | Where-Object { ($_.Name -like 'MySQL*' -or $_.Name -like 'MariaDB*' -or $_.Name -like 'postgresql*') -and $_.Name -notlike '*router*' } | Select-Object Name,DisplayName,State,PathName | ConvertTo-Json -Compress`,
   )
@@ -92,7 +102,71 @@ export async function listDbServices(): Promise<DbService[]> {
   )
 }
 
-export async function serviceAction(name: string, action: 'start' | 'stop'): Promise<{ ok: boolean; error?: string }> {
+interface BrewService {
+  name: string
+  running?: boolean
+  status?: string
+}
+
+function mapStateDarwin(status: string | undefined, running: boolean | undefined): ServiceState {
+  if (running) return 'running'
+  const v = (status ?? '').toLowerCase()
+  if (v === 'started') return 'running'
+  if (v === 'stopped' || v === 'none') return 'stopped'
+  if (v.includes('pending') || v.includes('scheduled')) return 'pending'
+  return 'unknown'
+}
+
+// Homebrew is the de-facto standard for local dev databases on macOS. If it
+// isn't installed, degrade to an empty list (no local services) rather than
+// erroring — there's no equally standard fallback (launchctl plists vary too
+// much per formula to parse generically).
+async function listDbServicesDarwin(): Promise<DbService[]> {
+  const res = await brew(['services', 'list', '--json'])
+  if (res.code !== 0 || !res.stdout.trim()) return []
+  let parsed: BrewService[]
+  try {
+    parsed = JSON.parse(res.stdout)
+  } catch {
+    return []
+  }
+  const list = parsed.filter((s) => /^(mysql|mariadb|postgresql)/i.test(s.name))
+
+  return Promise.all(
+    list.map(async (s): Promise<DbService> => {
+      const kind: DbKind = /postgres/i.test(s.name) ? 'postgres' : 'mysql'
+      const prefixRes = await brew(['--prefix', s.name], 8000)
+      const prefix = prefixRes.code === 0 ? prefixRes.stdout.trim() : undefined
+      const candidates = kind === 'postgres' ? ['postgres', 'pg_ctl'] : ['mysqld', 'mariadbd']
+      let binPath: string | undefined
+      if (prefix) {
+        for (const bin of candidates) {
+          const p = `${prefix}/bin/${bin}`
+          if (existsSync(p)) {
+            binPath = p
+            break
+          }
+        }
+      }
+      const version = await versionFromBinary(binPath)
+      return {
+        name: s.name,
+        displayName: s.name,
+        kind,
+        state: mapStateDarwin(s.status, s.running),
+        rawState: s.status ?? (s.running ? 'started' : 'stopped'),
+        version,
+        binPath,
+      }
+    }),
+  )
+}
+
+export function listDbServices(): Promise<DbService[]> {
+  return process.platform === 'darwin' ? listDbServicesDarwin() : listDbServicesWin32()
+}
+
+async function serviceActionWin32(name: string, action: 'start' | 'stop'): Promise<{ ok: boolean; error?: string }> {
   // service names come from listDbServices, but validate anyway since this crosses IPC
   if (!/^[A-Za-z0-9_.-]{1,80}$/.test(name)) return { ok: false, error: 'Invalid service name' }
   const verb = action === 'start' ? 'Start-Service' : 'Stop-Service'
@@ -104,4 +178,20 @@ export async function serviceAction(name: string, action: 'start' | 'stop'): Pro
     ok: false,
     error: denied ? 'Access denied — run DevFlow Manager as Administrator to control Windows services.' : msg,
   }
+}
+
+async function serviceActionDarwin(name: string, action: 'start' | 'stop'): Promise<{ ok: boolean; error?: string }> {
+  // brew formula names can include '@' (e.g. postgresql@16)
+  if (!/^[A-Za-z0-9_.@-]{1,80}$/.test(name)) return { ok: false, error: 'Invalid service name' }
+  const res = await brew(['services', action, name], 30000)
+  if (res.code === 0) return { ok: true }
+  const msg = res.stderr.trim().split(/\r?\n/)[0] || `brew services ${action} failed`
+  return {
+    ok: false,
+    error: /not found|no formula/i.test(msg) ? `Homebrew formula '${name}' not found.` : msg,
+  }
+}
+
+export function serviceAction(name: string, action: 'start' | 'stop'): Promise<{ ok: boolean; error?: string }> {
+  return process.platform === 'darwin' ? serviceActionDarwin(name, action) : serviceActionWin32(name, action)
 }

@@ -30,6 +30,26 @@ const SYSTEM_NAMES = new Set([
   'runtimebroker.exe',
   'searchhost.exe',
   'securityhealthservice.exe',
+  // macOS
+  'kernel_task',
+  'launchd',
+  'windowserver',
+  'loginwindow',
+  'mds',
+  'mds_stores',
+  'mdworker',
+  'coreaudiod',
+  'logd',
+  'securityd',
+  'opendirectoryd',
+  'diskarbitrationd',
+  'systemuiserver',
+  'dock',
+  'finder',
+  'cfprefsd',
+  'notifyd',
+  'usernoted',
+  'distnoted',
 ])
 
 const RUNTIME_NAMES = new Set([
@@ -47,9 +67,34 @@ const RUNTIME_NAMES = new Set([
   'cargo.exe',
   'dotnet.exe',
   'electron.exe',
+  // macOS (no .exe suffix)
+  'node',
+  'python',
+  'python3',
+  'bun',
+  'deno',
+  'java',
+  'php',
+  'go',
+  'rustc',
+  'cargo',
+  'dotnet',
+  'electron',
 ])
 
-const EDITOR_NAMES = new Set(['code.exe', 'cursor.exe', 'devenv.exe', 'idea64.exe', 'webstorm64.exe', 'pycharm64.exe'])
+const EDITOR_NAMES = new Set([
+  'code.exe',
+  'cursor.exe',
+  'devenv.exe',
+  'idea64.exe',
+  'webstorm64.exe',
+  'pycharm64.exe',
+  // macOS
+  'code',
+  'code helper',
+  'cursor',
+  'cursor helper',
+])
 
 const DATABASE_NAMES = new Set([
   'mysqld.exe',
@@ -59,6 +104,14 @@ const DATABASE_NAMES = new Set([
   'mongod.exe',
   'redis-server.exe',
   'memurai.exe',
+  // macOS (Homebrew-installed binaries, no .exe suffix)
+  'mysqld',
+  'mysql',
+  'postgres',
+  'pg_ctl',
+  'mongod',
+  'redis-server',
+  'mariadbd',
 ])
 
 const CONTAINER_NAMES = new Set([
@@ -67,9 +120,26 @@ const CONTAINER_NAMES = new Set([
   'com.docker.backend.exe',
   'com.docker.service.exe',
   'vpnkit.exe',
+  // macOS
+  'docker',
+  'docker-compose',
+  'com.docker.backend',
+  'com.docker.virtualization',
+  'com.docker.driver.amd64-linux',
 ])
 
-const SHELL_NAMES = new Set(['cmd.exe', 'powershell.exe', 'pwsh.exe', 'bash.exe', 'sh.exe'])
+const SHELL_NAMES = new Set([
+  'cmd.exe',
+  'powershell.exe',
+  'pwsh.exe',
+  'bash.exe',
+  'sh.exe',
+  // macOS
+  'zsh',
+  'bash',
+  'sh',
+  'fish',
+])
 
 const DEV_CMD_RE =
   /node_modules|npm\s|pnpm\s|yarn\s|bun\s|vite|next|nuxt|webpack|rollup|esbuild|turbo|devflow|strapi|payload|react-scripts|electron-vite|create-vite|jest|vitest|playwright|cypress|tsc\b|tsx\b|nodemon|pm2/i
@@ -77,7 +147,7 @@ const DEV_CMD_RE =
 let prevCpuTimes = new Map<number, number>()
 let prevSampleAt = 0
 
-function queryProcesses(): Promise<RawProc[]> {
+function queryProcessesWin32(): Promise<RawProc[]> {
   return new Promise((resolve) => {
     execFile(
       'powershell.exe',
@@ -101,6 +171,47 @@ function queryProcesses(): Promise<RawProc[]> {
   })
 }
 
+// Same 100ns-unit scaling rationale as stats.ts's darwin queryProcesses (ps
+// only reports whole-second cumulative CPU time on macOS).
+function queryProcessesDarwin(): Promise<RawProc[]> {
+  return new Promise((resolve) => {
+    execFile(
+      '/bin/ps',
+      ['-axo', 'pid=,ppid=,rss=,time=,command='],
+      { maxBuffer: 48 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err || !stdout) return resolve([])
+        const out: RawProc[] = []
+        for (const line of stdout.split('\n')) {
+          const trimmed = line.trim()
+          if (!trimmed) continue
+          const m = trimmed.match(/^(\d+)\s+(\d+)\s+(\d+)\s+(?:(\d+)-)?(\d+):(\d+):(\d+)\s+(.+)$/)
+          if (!m) continue
+          const [, pidStr, ppidStr, rssStr, daysStr, hh, mm, ss, command] = m
+          const totalSeconds =
+            (daysStr ? Number(daysStr) * 86400 : 0) + Number(hh) * 3600 + Number(mm) * 60 + Number(ss)
+          const firstToken = command.split(/\s+/)[0] ?? command
+          const name = firstToken.split('/').pop() || firstToken
+          out.push({
+            ProcessId: Number(pidStr),
+            ParentProcessId: Number(ppidStr),
+            Name: name,
+            CommandLine: command,
+            WorkingSetSize: Number(rssStr) * 1024,
+            UserModeTime: totalSeconds * 1e7,
+            KernelModeTime: 0,
+          })
+        }
+        resolve(out)
+      },
+    )
+  })
+}
+
+function queryProcesses(): Promise<RawProc[]> {
+  return process.platform === 'darwin' ? queryProcessesDarwin() : queryProcessesWin32()
+}
+
 function categorize(name: string, cmd: string): DevProcessCategory | null {
   const lower = name.toLowerCase()
   if (lower.includes('devflow') || /devflow-manager/i.test(cmd)) return 'devflow'
@@ -118,6 +229,9 @@ function isKillable(pid: number, name: string, managedByDevFlow: boolean): { kil
   const lower = name.toLowerCase()
   if (pid === 0 || pid === 4 || pid === process.pid) {
     return { killable: false, reason: 'This process belongs to Windows or DevFlow itself.' }
+  }
+  if (process.platform === 'darwin' && pid < 100) {
+    return { killable: false, reason: `${name} is a low-PID macOS system process and cannot be terminated safely.` }
   }
   if (SYSTEM_NAMES.has(lower)) {
     return { killable: false, reason: `${name} is a system process and cannot be terminated safely.` }
@@ -215,6 +329,32 @@ export async function killDevProcess(pid: number): Promise<{ ok: boolean; error?
   const target = snap.processes.find((p) => p.pid === pid)
   if (!target) return { ok: false, error: 'Process not found or no longer running.' }
   if (!target.killable) return { ok: false, error: target.reason ?? 'Process cannot be terminated.' }
+
+  if (process.platform === 'darwin') {
+    // Dev processes are spawned detached/grouped, so a negative pid targets
+    // the whole process group; fall back to a plain kill if it isn't a
+    // group leader (ESRCH).
+    try {
+      process.kill(-pid, 'SIGTERM')
+    } catch {
+      try {
+        process.kill(pid, 'SIGTERM')
+      } catch {
+        /* already gone */
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    try {
+      process.kill(-pid, 'SIGKILL')
+    } catch {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        /* already gone */
+      }
+    }
+    return { ok: true }
+  }
 
   await new Promise<void>((resolve) => {
     execFile('taskkill', ['/pid', String(pid), '/t', '/f'], { windowsHide: true }, () => resolve())

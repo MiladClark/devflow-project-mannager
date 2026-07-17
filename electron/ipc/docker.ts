@@ -10,7 +10,18 @@ const DOCKER_DESKTOP_PATHS = [
   'C:\\Program Files (x86)\\Docker\\Docker\\Docker Desktop.exe',
 ]
 
+const DOCKER_DESKTOP_APP_MAC = '/Applications/Docker.app'
+
 function launchDockerDesktop(): { ok: boolean; error?: string } {
+  if (process.platform === 'darwin') {
+    if (!existsSync(DOCKER_DESKTOP_APP_MAC)) {
+      return { ok: false, error: 'Docker Desktop was not found in /Applications.' }
+    }
+    // detach so Docker Desktop keeps running independently of DevFlow
+    const child = spawn('open', ['-a', 'Docker'], { detached: true, stdio: 'ignore' })
+    child.unref()
+    return { ok: true }
+  }
   const exe = DOCKER_DESKTOP_PATHS.find((p) => existsSync(p))
   if (!exe) return { ok: false, error: 'Docker Desktop was not found in its usual install location.' }
   // detach so Docker Desktop keeps running independently of DevFlow

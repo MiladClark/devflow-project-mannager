@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import decodeIco from 'decode-ico'
 import pngToIco from 'png-to-ico'
 import sharp from 'sharp'
+import png2icons from 'png2icons'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const ico32 = path.join(root, 'build', 'icon.ico')
@@ -16,6 +17,7 @@ const ico256 = path.join(root, 'build', 'devtune-logo-gradient-blue-bg-white.ico
 const buildDir = path.join(root, 'build')
 const outIco = path.join(buildDir, 'icon.ico')
 const outPng = path.join(buildDir, 'icon.png')
+const outIcns = path.join(buildDir, 'icon.icns')
 
 if (!existsSync(ico32)) {
   console.error('Missing 32px icon:', ico32)
@@ -62,6 +64,19 @@ const pngBuffers = await Promise.all(
 
 mkdirSync(buildDir, { recursive: true })
 writeFileSync(outIco, await pngToIco(pngBuffers))
+
+// .icns for the macOS build (electron-builder mac.icon). Pure-JS generator so
+// this runs on the Windows dev machine too — no iconutil/macOS dependency.
+// Source is only 256×256; png2icons upscales internally for the larger
+// (512/1024) slots it embeds, so this is lower-fidelity than true 1024px art
+// but keeps a single source-of-truth icon.
+const icnsBuffer = png2icons.createICNS(png256src, png2icons.BICUBIC2, 0)
+if (!icnsBuffer) {
+  console.error('Failed to generate icon.icns from icon.png')
+  process.exit(1)
+}
+writeFileSync(outIcns, icnsBuffer)
+
 console.log(
-  `Prepared ${outIco} (${sizes.join(', ')}) and ${outPng} from icon.ico + devtune-logo-gradient-blue-bg-white.ico`,
+  `Prepared ${outIco}, ${outIcns} (${sizes.join(', ')}) and ${outPng} from icon.ico + devtune-logo-gradient-blue-bg-white.ico`,
 )

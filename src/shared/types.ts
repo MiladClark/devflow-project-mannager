@@ -340,7 +340,7 @@ export type HealthPhase = 'queued' | 'outdated' | 'audit' | 'engines' | 'done' |
 
 // ---- terminal ----
 
-export type TermShell = 'powershell' | 'pwsh' | 'gitbash' | 'cmd'
+export type TermShell = 'powershell' | 'pwsh' | 'gitbash' | 'cmd' | 'zsh' | 'bash' | 'sh'
 
 export interface TermSessionInfo {
   sessionId: string

@@ -1,6 +1,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
+import path from 'node:path'
 import type { EditorStatus, PreferredEditor } from '../../src/shared/types'
 import { detectEnv, expandEnv } from './tools'
 import { store } from './store'
@@ -12,6 +13,8 @@ const EDITOR_BINARIES = {
     paths: [
       '%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\bin\\code.cmd',
       '%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\bin\\code',
+      '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code',
+      path.join(os.homedir(), 'Applications/Visual Studio Code.app/Contents/Resources/app/bin/code'),
     ],
   },
   cursor: {
@@ -20,6 +23,8 @@ const EDITOR_BINARIES = {
     paths: [
       '%LOCALAPPDATA%\\Programs\\cursor\\resources\\app\\bin\\cursor.cmd',
       '%LOCALAPPDATA%\\Programs\\cursor\\resources\\app\\bin\\cursor',
+      '/Applications/Cursor.app/Contents/Resources/app/bin/cursor',
+      path.join(os.homedir(), 'Applications/Cursor.app/Contents/Resources/app/bin/cursor'),
     ],
   },
 } as const
@@ -52,6 +57,14 @@ async function resolveExecutable(editor: keyof typeof EDITOR_BINARIES): Promise<
     return null
   }
 
+  if (editor === 'vscode' && process.platform === 'darwin') {
+    // Cursor's own CLI is named `cursor`, but guard against a `code` shim
+    // that resolves into a Cursor.app bundle rather than VS Code's.
+    const hit = await findOnPath('code', env, (p) => !/cursor/i.test(p))
+    if (hit && (await run(hit, ['--version'], env))) return hit
+    return null
+  }
+
   if (await run(def.cmd, ['--version'], env)) return def.cmd
   return null
 }
@@ -61,12 +74,16 @@ function findOnPath(
   env: NodeJS.ProcessEnv,
   match: (resolvedPath: string) => boolean,
 ): Promise<string | null> {
+  const isWin = process.platform === 'win32'
+  const bin = isWin ? 'where' : 'which'
+  const args = isWin ? [cmd] : ['-a', cmd]
   return new Promise((resolve) => {
-    execFile('where', [cmd], { shell: true, env, windowsHide: true, cwd: os.homedir() }, (err, stdout) => {
+    execFile(bin, args, { shell: true, env, windowsHide: true, cwd: os.homedir() }, (err, stdout) => {
       if (err || !stdout) return resolve(null)
       const hit = stdout
         .split(/\r?\n/)
         .map((s) => s.trim())
+        .filter(Boolean)
         .find(match)
       resolve(hit ?? null)
     })

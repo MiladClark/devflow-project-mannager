@@ -37,6 +37,15 @@ function installEnv(): NodeJS.ProcessEnv {
     }
   }
 
+  // GUI-launched apps on macOS don't source shell rc files, so launchd's PATH
+  // often misses Homebrew — prepend its well-known install locations.
+  if (process.platform === 'darwin' && cachedInstallPath === undefined) {
+    const extra = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin'].filter((p) =>
+      existsSync(p),
+    )
+    cachedInstallPath = [...extra, process.env.PATH].filter(Boolean).join(':')
+  }
+
   return {
     ...process.env,
     ...(cachedInstallPath ? { PATH: cachedInstallPath } : {}),
@@ -57,6 +66,11 @@ export function detectEnv(): NodeJS.ProcessEnv {
     const npmBin = path.join(env.APPDATA ?? process.env.APPDATA ?? '', 'npm')
     if (npmBin && existsSync(npmBin)) {
       env.PATH = [npmBin, env.PATH].filter(Boolean).join(';')
+    }
+  } else if (process.platform === 'darwin') {
+    const npmGlobalBin = path.join(os.homedir(), '.npm-global', 'bin')
+    if (existsSync(npmGlobalBin)) {
+      env.PATH = [npmGlobalBin, env.PATH].filter(Boolean).join(':')
     }
   }
   return env

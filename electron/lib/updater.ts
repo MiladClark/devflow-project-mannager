@@ -111,7 +111,79 @@ async function verifyChecksum(file: string, expected: string) {
   }
 }
 
+/** DevFlow Manager.app/Contents/MacOS/DevFlow Manager -> DevFlow Manager.app */
+function getAppBundlePath(): string {
+  return path.resolve(path.dirname(process.execPath), '..', '..')
+}
+
+function spawnApplyScriptDarwin(zipPath: string) {
+  const bundlePath = getAppBundlePath()
+  const logPath = path.join(os.tmpdir(), 'devflow-update.log')
+  const scriptPath = path.join(os.tmpdir(), `devflow-apply-${Date.now()}.sh`)
+  const pid = process.pid
+
+  const esc = (s: string) => s.replace(/'/g, "'\\''")
+
+  const script = `#!/bin/bash
+LOG='${esc(logPath)}'
+log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $1" >> "$LOG"; }
+
+log "=== DevFlow update apply started ==="
+ZIP='${esc(zipPath)}'
+BUNDLE='${esc(bundlePath)}'
+PARENT_PID=${pid}
+STAGING="$(mktemp -d "\${TMPDIR:-/tmp}/devflow-update-staging.XXXXXX")"
+
+log "zip=$ZIP bundle=$BUNDLE parentPid=$PARENT_PID staging=$STAGING"
+
+for i in $(seq 1 120); do
+  kill -0 "$PARENT_PID" 2>/dev/null || break
+  sleep 0.5
+done
+kill -0 "$PARENT_PID" 2>/dev/null && log "WARN parent process $PARENT_PID still running after wait"
+
+ditto -x -k "$ZIP" "$STAGING"
+if [ $? -ne 0 ]; then
+  log "ERROR failed to expand archive"
+  exit 1
+fi
+log "Expanded archive to staging"
+
+NEW_APP="$(find "$STAGING" -maxdepth 1 -name '*.app' | head -n 1)"
+if [ -z "$NEW_APP" ]; then
+  log "ERROR no .app bundle found in staging"
+  exit 1
+fi
+
+rsync -a --delete "$NEW_APP/" "$BUNDLE/"
+if [ $? -ne 0 ]; then
+  log "ERROR rsync into $BUNDLE failed"
+  exit 1
+fi
+log "Synced new bundle into $BUNDLE"
+
+xattr -dr com.apple.quarantine "$BUNDLE" 2>/dev/null
+chmod +x "$BUNDLE/Contents/MacOS/"* 2>/dev/null
+
+log "Relaunching $BUNDLE"
+open "$BUNDLE"
+
+rm -rf "$ZIP" "$STAGING" "$0"
+log "=== DevFlow update apply finished ==="
+`
+  fs.writeFileSync(scriptPath, script, { mode: 0o755 })
+  fs.appendFileSync(logPath, `\n--- apply script ${new Date().toISOString()} ---\n`, 'utf-8')
+
+  const child = spawn('/bin/bash', [scriptPath], { detached: true, stdio: 'ignore' })
+  child.unref()
+}
+
 function spawnApplyScript(zipPath: string, installDir: string, exeName: string) {
+  if (process.platform === 'darwin') {
+    spawnApplyScriptDarwin(zipPath)
+    return
+  }
+
   const logPath = path.join(os.tmpdir(), 'devflow-update.log')
   const scriptPath = path.join(os.tmpdir(), `devflow-apply-${Date.now()}.ps1`)
   const pid = process.pid

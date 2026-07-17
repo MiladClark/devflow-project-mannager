@@ -226,17 +226,29 @@ async function runElectronAdapter(state: RunnerState): Promise<boolean> {
   return true
 }
 
+function shQuote(p: string): string {
+  return `'${p.replace(/'/g, "'\\''")}'`
+}
+
+function hostPlatformToken(): 'win' | 'mac' | 'linux' {
+  return process.platform === 'darwin' ? 'mac' : process.platform === 'linux' ? 'linux' : 'win'
+}
+
 async function compressStaticOutput(state: RunnerState, zipPath: string) {
   const { config } = state
   const source = path.join(config.projectPath, config.outputDir)
   if (!fs.existsSync(source)) throw new Error(`Build output directory not found: ${config.outputDir}`)
-  const escSource = source.replace(/'/g, "''")
-  const escDest = zipPath.replace(/'/g, "''")
-  const code = await spawnCmd(
-    state,
-    `powershell -NoProfile -Command "Compress-Archive -Path '${escSource}\\*' -DestinationPath '${escDest}' -Force"`,
-    config.projectPath,
-  )
+
+  let cmd: string
+  if (process.platform === 'darwin') {
+    // ditto is Apple's recommended zip tool (preserves resource forks/metadata).
+    cmd = `ditto -c -k --sequesterRsrc --keepParent ${shQuote(source)} ${shQuote(zipPath)}`
+  } else {
+    const escSource = source.replace(/'/g, "''")
+    const escDest = zipPath.replace(/'/g, "''")
+    cmd = `powershell -NoProfile -Command "Compress-Archive -Path '${escSource}\\*' -DestinationPath '${escDest}' -Force"`
+  }
+  const code = await spawnCmd(state, cmd, config.projectPath)
   if (code !== 0) throw new Error(`Compression failed with exit code ${code}`)
 }
 
@@ -249,8 +261,8 @@ async function runStaticAdapter(state: RunnerState): Promise<boolean> {
     const name = applyNamingTemplate(state.config.namingTemplate, {
       appName: state.config.appName,
       version: state.config.version,
-      platform: 'win',
-      arch: 'x64',
+      platform: hostPlatformToken(),
+      arch: process.arch,
     })
     fs.mkdirSync(state.outputDir!, { recursive: true })
     await compressStaticOutput(state, path.join(state.outputDir!, `${name}.zip`))
@@ -267,8 +279,8 @@ function copyStaticFolder(state: RunnerState) {
   const name = applyNamingTemplate(config.namingTemplate, {
     appName: config.appName,
     version: config.version,
-    platform: 'win',
-    arch: 'x64',
+    platform: hostPlatformToken(),
+    arch: process.arch,
   })
   const dest = path.join(state.outputDir!, name)
   fs.rmSync(dest, { recursive: true, force: true })

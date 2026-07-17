@@ -28,10 +28,34 @@ function shellCommand(shell: TermShell): { file: string; args: string[] } | null
       return { file: 'cmd.exe', args: [] }
     case 'gitbash':
       return existsSync(GIT_BASH) ? { file: GIT_BASH, args: ['--login', '-i'] } : null
+    case 'zsh':
+      return existsSync('/bin/zsh') ? { file: '/bin/zsh', args: ['-l'] } : null
+    case 'bash':
+      return existsSync('/bin/bash') ? { file: '/bin/bash', args: ['-l'] } : null
+    case 'sh':
+      return existsSync('/bin/sh') ? { file: '/bin/sh', args: ['-l'] } : null
   }
 }
 
+function defaultMacShell(): TermShell | null {
+  const loginShell = process.env.SHELL
+  if (!loginShell) return null
+  if (/\/zsh$/.test(loginShell)) return 'zsh'
+  if (/\/bash$/.test(loginShell)) return 'bash'
+  if (/\/sh$/.test(loginShell)) return 'sh'
+  return null
+}
+
 export function availableShells(): TermShell[] {
+  if (process.platform === 'darwin') {
+    const shells: TermShell[] = []
+    const preferred = defaultMacShell()
+    if (preferred) shells.push(preferred)
+    if (!shells.includes('zsh') && existsSync('/bin/zsh')) shells.push('zsh')
+    if (!shells.includes('bash') && existsSync('/bin/bash')) shells.push('bash')
+    if (shells.length === 0) shells.push('sh')
+    return shells
+  }
   const shells: TermShell[] = ['powershell']
   // pwsh presence is cheap to test via PATHEXT resolution at spawn; offer it and let create fail gracefully
   if (process.env.ProgramFiles && existsSync(`${process.env.ProgramFiles}\\PowerShell\\7\\pwsh.exe`)) shells.unshift('pwsh')

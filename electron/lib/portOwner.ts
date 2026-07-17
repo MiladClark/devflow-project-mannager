@@ -16,6 +16,12 @@ const SYSTEM_PROCESSES = new Set([
   'smss.exe',
   'svchost.exe',
   'explorer.exe',
+  // macOS
+  'kernel_task',
+  'launchd',
+  'windowserver',
+  'loginwindow',
+  'systemuiserver',
 ])
 
 function run(cmd: string, args: string[]): Promise<string> {
@@ -34,7 +40,7 @@ async function listeningPids(port: number): Promise<number[]> {
 }
 
 /** All TCP ports in LISTENING state → first PID bound to each port. */
-async function listeningPortMap(): Promise<Map<number, number>> {
+async function listeningPortMapWin32(): Promise<Map<number, number>> {
   const out = await run('netstat', ['-ano', '-p', 'TCP'])
   const portToPid = new Map<number, number>()
   for (const line of out.split(/\r?\n/)) {
@@ -53,11 +59,48 @@ async function listeningPortMap(): Promise<Map<number, number>> {
   return portToPid
 }
 
-async function processName(pid: number): Promise<string> {
+/** Same contract as the win32 version, via `lsof`'s parseable field output (-F). */
+async function listeningPortMapDarwin(): Promise<Map<number, number>> {
+  const out = await run('/usr/sbin/lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Fpn'])
+  const portToPid = new Map<number, number>()
+  let currentPid: number | null = null
+  for (const line of out.split('\n')) {
+    if (!line) continue
+    const tag = line[0]
+    const value = line.slice(1)
+    if (tag === 'p') {
+      currentPid = Number(value)
+    } else if (tag === 'n' && currentPid !== null) {
+      const m = value.match(/:(\d+)$/)
+      if (!m) continue
+      const port = Number(m[1])
+      if (!Number.isInteger(port) || port < 1 || port > 65535) continue
+      if (!portToPid.has(port)) portToPid.set(port, currentPid)
+    }
+  }
+  return portToPid
+}
+
+function listeningPortMap(): Promise<Map<number, number>> {
+  return process.platform === 'darwin' ? listeningPortMapDarwin() : listeningPortMapWin32()
+}
+
+async function processNameWin32(pid: number): Promise<string> {
   const out = await run('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'])
   // "node.exe","12345","Console","1","123,456 K"
   const m = out.match(/^"([^"]+)"/m)
   return m?.[1] ?? 'unknown'
+}
+
+async function processNameDarwin(pid: number): Promise<string> {
+  const out = await run('/bin/ps', ['-p', String(pid), '-o', 'comm='])
+  const trimmed = out.trim()
+  if (!trimmed) return 'unknown'
+  return trimmed.split('/').pop() || trimmed
+}
+
+function processName(pid: number): Promise<string> {
+  return process.platform === 'darwin' ? processNameDarwin(pid) : processNameWin32(pid)
 }
 
 export async function getPortOwner(port: number): Promise<PortOwner | null> {
@@ -165,9 +208,21 @@ export async function takeoverPort(
     if (res.response !== 0) return { ok: false, error: 'Cancelled.' }
   }
 
-  await new Promise<void>((resolve) => {
-    execFile('taskkill', ['/pid', String(owner.pid), '/t', '/f'], { windowsHide: true }, () => resolve())
-  })
+  if (process.platform === 'darwin') {
+    try {
+      process.kill(-owner.pid, 'SIGKILL')
+    } catch {
+      try {
+        process.kill(owner.pid, 'SIGKILL')
+      } catch {
+        /* already gone */
+      }
+    }
+  } else {
+    await new Promise<void>((resolve) => {
+      execFile('taskkill', ['/pid', String(owner.pid), '/t', '/f'], { windowsHide: true }, () => resolve())
+    })
+  }
 
   // wait for the port to actually free up (max ~3s)
   for (let i = 0; i < 10; i++) {

@@ -380,7 +380,7 @@ function createMockApi(): Api {
       ok: true,
       lines: [
         { type: 'comment', raw: '# Database' },
-        { type: 'pair', key: 'DATABASE_URL', value: 'postgresql://postgres:secret@127.0.0.1:5432/app', raw: 'DATABASE_URL=postgresql://postgres:secret@127.0.0.1:5432/app' },
+        { type: 'pair', key: 'DATABASE_URL', value: 'postgresql://postgres:changeme@localhost:5432/app', raw: 'DATABASE_URL=postgresql://postgres:changeme@localhost:5432/app' },
         { type: 'blank', raw: '' },
         { type: 'pair', key: 'NEXT_PUBLIC_API_URL', value: 'http://localhost:3007/api', raw: 'NEXT_PUBLIC_API_URL=http://localhost:3007/api' },
         { type: 'pair', key: 'SECRET_KEY', value: 'dev-secret-123', raw: 'SECRET_KEY=dev-secret-123' },

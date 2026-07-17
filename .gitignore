@@ -5,3 +5,7 @@ release
 devflow
 .verify-tmp
 *.log
+.env
+.env.*
+*.pfx
+*.p12

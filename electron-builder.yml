@@ -60,9 +60,71 @@ extraResources:
     to: icon.ico
   - from: build/icon.png
     to: icon.png
+  - from: build/icon.icns
+    to: icon.icns
 win:
   icon: build/icon.ico
   # winCodeSign extraction needs symlink privilege on Windows; embed icon via rcedit post-build instead.
   signAndEditExecutable: false
   target:
     - dir
+mac:
+  icon: build/icon.icns
+  target:
+    - target: zip
+      arch: [x64, arm64]
+    - target: dmg
+      arch: [x64, arm64]
+  artifactName: ${name}-${version}-${arch}.${ext}
+  # No paid Apple Developer account (same "no paid cert" stance as SIGNING.md
+  # for Windows) — ship ad-hoc-signed, unnotarized builds. Users must
+  # right-click → Open (or clear the quarantine attribute) on first launch.
+  notarize: false
+  # electron-builder's platform-scoped `files:` REPLACES the top-level array
+  # rather than merging with it, so the base excludes are repeated here with
+  # win32 prebuilds pruned instead of darwin ones (mirrors win: implicitly
+  # using the top-level list, which still prunes darwin-*).
+  files:
+    - dist/**
+    - dist-electron/**
+    - package.json
+    - "!node_modules/**"
+    - node_modules/node-pty/**
+    - "!node_modules/node-pty/prebuilds/win32-*"
+    - "!node_modules/node-pty/deps/**"
+    - "!node_modules/node-pty/src/**"
+    - "!node_modules/node-pty/scripts/**"
+    - "!node_modules/node-pty/third_party/**"
+    - "!node_modules/node-pty/typings/**"
+    - "!node_modules/node-pty/build/**"
+    - "!node_modules/node-pty/binding.gyp"
+    - "!node_modules/node-pty/**/*.{md,markdown,ts,map}"
+    - "!node_modules/node-pty/**/{README*,CHANGELOG*,LICENSE*,*.d.ts}"
+    - "!.verify-tmp/**"
+    - "!src/**"
+    - "!electron/**"
+    - "!scripts/**"
+    - "!public/**"
+    - "!build/**"
+    - "!.claude/**"
+    - "!.git/**"
+    - "!release/**"
+    - "!devflow/**"
+    - "!**/*.{md,MD}"
+    - "!tsconfig.json"
+    - "!vite.config.ts"
+    - "!build-release.bat"
+    - "!SIGNING.md"
+    - "!.gitignore"
+    - "!**/*.pdb"
+    - "!**/*.map"
+dmg:
+  artifactName: ${name}-${version}-${arch}.${ext}
+publish:
+  provider: github
+  owner: MiladClark
+  repo: devflow-project-mannager
+  # Windows and macOS CI jobs upload to the same release in parallel; staying
+  # in draft avoids one job's finalize wiping assets the other already
+  # uploaded. A final CI step flips it to a real release once all jobs are done.
+  releaseType: draft

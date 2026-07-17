@@ -38,7 +38,7 @@ export function getSystemStats(): SystemStats {
   }
 }
 
-function queryProcesses(): Promise<ProcInfo[]> {
+function queryProcessesWin32(): Promise<ProcInfo[]> {
   return new Promise((resolve) => {
     execFile(
       'powershell.exe',
@@ -60,6 +60,45 @@ function queryProcesses(): Promise<ProcInfo[]> {
       },
     )
   })
+}
+
+// macOS `ps` only reports cumulative CPU time at whole-second resolution (no
+// 100ns FILETIME equivalent), so we scale seconds by 1e7 to reuse the same
+// "100ns units -> ms via /10000" math the Windows path and downstream
+// consumers (getProcessTreeStats) already rely on — coarser granularity, same unit contract.
+function queryProcessesDarwin(): Promise<ProcInfo[]> {
+  return new Promise((resolve) => {
+    execFile(
+      '/bin/ps',
+      ['-axo', 'pid=,ppid=,rss=,time='],
+      { maxBuffer: 32 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err || !stdout) return resolve([])
+        const out: ProcInfo[] = []
+        for (const line of stdout.split('\n')) {
+          const trimmed = line.trim()
+          if (!trimmed) continue
+          const m = trimmed.match(/^(\d+)\s+(\d+)\s+(\d+)\s+(?:(\d+)-)?(\d+):(\d+):(\d+)$/)
+          if (!m) continue
+          const [, pidStr, ppidStr, rssStr, daysStr, hh, mm, ss] = m
+          const totalSeconds =
+            (daysStr ? Number(daysStr) * 86400 : 0) + Number(hh) * 3600 + Number(mm) * 60 + Number(ss)
+          out.push({
+            ProcessId: Number(pidStr),
+            ParentProcessId: Number(ppidStr),
+            WorkingSetSize: Number(rssStr) * 1024,
+            UserModeTime: totalSeconds * 1e7,
+            KernelModeTime: 0,
+          })
+        }
+        resolve(out)
+      },
+    )
+  })
+}
+
+function queryProcesses(): Promise<ProcInfo[]> {
+  return process.platform === 'darwin' ? queryProcessesDarwin() : queryProcessesWin32()
 }
 
 function collectTree(rootPid: number, byParent: Map<number, ProcInfo[]>, byPid: Map<number, ProcInfo>): ProcInfo[] {

@@ -17,6 +17,12 @@ export async function checkForUpdates(serverUrl?: string): Promise<UpdateCheckRe
     url.searchParams.set('product', 'devflow')
     url.searchParams.set('channel', channel)
     url.searchParams.set('version', current)
+    // Distinct per-arch platform ids (not just 'macos') — the releases table
+    // has no separate arch column, so a shared 'macos' value would let an
+    // arm64 and x64 build silently overwrite each other's row/download URL.
+    const platform =
+      process.platform === 'darwin' ? (process.arch === 'arm64' ? 'macos-arm64' : 'macos-x64') : 'windows'
+    url.searchParams.set('platform', platform)
     const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
     if (!res.ok) return { ok: false, error: `Server error (HTTP ${res.status})`, currentVersion: current }
     const json = await res.json()

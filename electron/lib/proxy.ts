@@ -15,11 +15,15 @@ const TOOL_PATHS: Record<'mkcert' | 'caddy', string[]> = {
     '%LOCALAPPDATA%\\Microsoft\\WinGet\\Links\\mkcert.exe',
     '%ProgramFiles%\\mkcert\\mkcert.exe',
     '%ChocolateyInstall%\\bin\\mkcert.exe',
+    '/opt/homebrew/bin/mkcert',
+    '/usr/local/bin/mkcert',
   ],
   caddy: [
     '%LOCALAPPDATA%\\Microsoft\\WinGet\\Links\\caddy.exe',
     '%ProgramFiles%\\Caddy\\caddy.exe',
     '%ChocolateyInstall%\\bin\\caddy.exe',
+    '/opt/homebrew/bin/caddy',
+    '/usr/local/bin/caddy',
   ],
 }
 
@@ -114,12 +118,13 @@ function readHosts(): string {
 }
 
 function writeHostsBlock(domains: string[]) {
+  const eol = process.platform === 'win32' ? '\r\n' : '\n'
   const lines = domains.map((d) => `127.0.0.1 ${d}`)
-  const block = [HOSTS_MARKER_BEGIN, ...lines, HOSTS_MARKER_END].join('\r\n')
+  const block = [HOSTS_MARKER_BEGIN, ...lines, HOSTS_MARKER_END].join(eol)
   const existing = readHosts()
   const re = new RegExp(`${HOSTS_MARKER_BEGIN}[\\s\\S]*?${HOSTS_MARKER_END}\\r?\\n?`, 'm')
   const cleaned = existing.replace(re, '').trimEnd()
-  const next = cleaned ? `${cleaned}\r\n\r\n${block}\r\n` : `${block}\r\n`
+  const next = cleaned ? `${cleaned}${eol}${eol}${block}${eol}` : `${block}${eol}`
   fs.writeFileSync(HOSTS_PATH, next, 'utf-8')
 }
 

@@ -1,0 +1,149 @@
+name: Release
+
+# Push a tag like "v1.2.0" (matching the version in package.json) to trigger
+# this. It builds the Windows portable zip and the macOS zips/dmgs (Intel +
+# Apple Silicon, built separately since electron-builder packages each mac
+# arch independently) in parallel, publishes them all to one GitHub Release,
+# and registers each platform's download with DevTune's OTA update-check API
+# — no manual build/upload/registration step needed.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-14 # Apple Silicon
+            platform: macos-arm64
+            mac_arch_flag: --arm64
+          - os: macos-13 # Intel
+            platform: macos-x64
+            mac_arch_flag: --x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify tag matches package.json version
+        shell: bash
+        run: |
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          TAG_NAME="${GITHUB_REF_NAME}"
+          if [ "$PKG_VERSION" != "$TAG_NAME" ]; then
+            echo "::error::Tag $TAG_NAME does not match package.json version $PKG_VERSION. Bump the version in package.json to match before tagging."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows portable zip
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          npm run package
+          node scripts/package-zip.mjs --out-dir release
+
+      - name: Build macOS zip + dmg
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: |
+          npm run build
+          node scripts/build-icon.mjs
+          npx electron-builder --mac ${{ matrix.mac_arch_flag }} --publish never
+          arch="${{ matrix.platform == 'macos-arm64' && 'arm64' || 'x64' }}"
+          node scripts/package-zip-mac.mjs --arch "$arch" --out-dir release
+
+      - name: Ensure draft release exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          else
+            # Three matrix jobs race to create this — if `create` loses the
+            # race, re-check rather than treating it as a hard failure.
+            gh release create "$TAG" --repo "$REPO" \
+              --draft --title "DevFlow Manager $TAG" --generate-notes \
+              || gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 \
+              || { echo "::error::Failed to create or find release $TAG"; exit 1; }
+          fi
+
+      - name: Upload release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          files=(release/*.zip release/*.dmg)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No build artifacts found in release/"
+            exit 1
+          fi
+          gh release upload "${{ github.ref_name }}" "${files[@]}" --repo "${{ github.repository }}" --clobber
+
+      # Manifests (checksum/size/filename) are handed to the final job instead
+      # of registering here, so registration only ever happens after the
+      # release is flipped out of draft (draft assets 404 for anonymous
+      # downloads, so advertising them to real users' update-checkers earlier
+      # than that would be a broken update).
+      - name: Upload manifest artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: manifest-${{ matrix.platform }}
+          path: release/manifest*.json
+          retention-days: 1
+
+  register-and-publish:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download manifests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: manifest-*
+          path: manifests
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
+
+      - name: Register releases with DevTune
+        env:
+          RELEASE_REGISTER_TOKEN: ${{ secrets.RELEASE_REGISTER_TOKEN }}
+        run: |
+          set -e
+          for manifest in manifests/manifest*.json; do
+            [ -e "$manifest" ] || continue
+            version=$(node -p "require('./$manifest').version")
+            fileName=$(node -p "require('./$manifest').fileName")
+            sha256=$(node -p "require('./$manifest').sha256")
+            size=$(node -p "require('./$manifest').sizeBytes")
+            platform=$(node -p "require('./$manifest').platform || 'windows'")
+            downloadUrl="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${fileName}"
+            echo "Registering $platform $version -> $downloadUrl"
+            curl -sS -f -X POST "https://devtune.app/api/admin/releases" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${RELEASE_REGISTER_TOKEN}" \
+              -d "{\"product\":\"devflow\",\"version\":\"${version}\",\"platform\":\"${platform}\",\"downloadUrl\":\"${downloadUrl}\",\"checksum\":\"${sha256}\",\"sizeBytes\":${size}}"
+          done

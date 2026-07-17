@@ -138,14 +138,14 @@ app.whenReady().then(async () => {
   startStatsPolling()
   applyLoginItemSettings()
   startNotifications(() => win)
-  // required update gate on startup
+  // update check on startup — notifies for any available update, required or not
   setTimeout(async () => {
     if (!store.getSettings().notifyUpdates) return
     const res = await checkForUpdates(getLicenseState().serverUrl)
-    if (res.ok && res.updateAvailable && res.required && res.latest) {
+    if (res.ok && res.updateAvailable && res.latest) {
       notifyUpdateAvailable({
         version: res.latest.version,
-        required: true,
+        required: !!res.required,
         releaseNotes: res.latest.releaseNotes,
       })
     }

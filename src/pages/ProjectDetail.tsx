@@ -173,7 +173,7 @@ export function ProjectDetail() {
         >
           <Package size={15} /> Build & Setup
         </button>
-        <OpenInEditorButton projectId={id} compact />
+        <OpenInEditorButton projectId={id} />
         <button
           onClick={() => api.openFolder(id)}
           className="flex items-center gap-2 rounded-lg border border-edge px-4 py-2 text-sm text-slate-300 hover:border-accent/50"

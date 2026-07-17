@@ -37,7 +37,7 @@ html {
   --sidebar-user-sub: #94a3b8;
   --sidebar-user-label: #64748b;
   --sidebar-user-value: #e2e8f0;
-  --sidebar-user-card-bg: transparent;
+  --sidebar-user-card-bg: var(--color-panel2);
   --sidebar-drag-bg: #1a2744;
 }
 

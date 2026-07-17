@@ -96,14 +96,14 @@ export function RightRail() {
 
       <div className="shrink-0 border-t border-edge p-4">
         <h3 className="mb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">Frameworks</h3>
-        <div className="flex flex-col gap-0.5">
+        <div className="grid grid-cols-2 gap-0.5">
           {[...frameworkCounts.entries()].map(([name, count]) => (
-            <div key={name} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-slate-400">
-              <span>{name}</span>
-              <span className="rounded-full bg-slate-800 px-2 text-xs text-slate-300">{count}</span>
+            <div key={name} className="flex items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 text-sm text-slate-400">
+              <span className="truncate">{name}</span>
+              <span className="shrink-0 rounded-full bg-slate-800 px-2 text-xs text-slate-300">{count}</span>
             </div>
           ))}
-          {frameworkCounts.size === 0 && <p className="px-2 text-xs text-slate-600">No projects yet</p>}
+          {frameworkCounts.size === 0 && <p className="col-span-2 px-2 text-xs text-slate-600">No projects yet</p>}
         </div>
       </div>
         </>

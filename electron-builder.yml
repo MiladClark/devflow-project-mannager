@@ -55,13 +55,16 @@ files:
 asarUnpack:
   - "**/node_modules/node-pty/**"
 extraResources:
-  # brand icon used at runtime for window + system-tray (Windows .ico)
+  # brand icon used at runtime for window + system-tray (Windows .ico/.png
+  # only — electron/lib/icon.ts never reads icon.icns from resourcesPath).
+  # icon.icns must NOT be listed here: electron-builder already hard-links
+  # build/icon.icns (via mac.icon below) into the .app bundle's own
+  # Resources/icon.icns, so an extraResources copy to that same destination
+  # collides and fails the mac build with EEXIST.
   - from: build/icon.ico
     to: icon.ico
   - from: build/icon.png
     to: icon.png
-  - from: build/icon.icns
-    to: icon.icns
 win:
   icon: build/icon.ico
   # winCodeSign extraction needs symlink privilege on Windows; embed icon via rcedit post-build instead.

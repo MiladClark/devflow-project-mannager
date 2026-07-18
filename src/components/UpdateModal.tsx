@@ -19,12 +19,14 @@ export function UpdateModal({
   required,
   canCancel,
   onCancel,
+  onRetry,
   onDismiss,
 }: {
   progress: UpdateProgress
   required?: boolean
   canCancel?: boolean
   onCancel?: () => void
+  onRetry?: () => void
   onDismiss?: () => void
 }) {
   const busy = progress.phase !== 'idle' && progress.phase !== 'error' && progress.phase !== 'cancelled'
@@ -76,6 +78,11 @@ export function UpdateModal({
             {canCancel && onCancel && (
               <button type="button" onClick={onCancel} className="btn-secondary px-5 py-2 text-sm">
                 Cancel update
+              </button>
+            )}
+            {progress.phase === 'error' && onRetry && (
+              <button type="button" onClick={onRetry} className="btn-secondary px-5 py-2 text-sm">
+                Retry
               </button>
             )}
             {(progress.phase === 'error' || progress.phase === 'cancelled') && onDismiss && !required && (

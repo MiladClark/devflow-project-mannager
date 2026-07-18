@@ -38,7 +38,7 @@ export function registerUpdateHandlers() {
 
   ipcMain.handle('updates:pending', () => getPendingUpdate())
 
-  ipcMain.handle('updates:start', (_e, version?: string) => startUpdate(version))
+  ipcMain.handle('updates:start', (_e, version?: string, required?: boolean) => startUpdate(version, required))
 
   ipcMain.handle('updates:cancel', () => {
     const res = cancelUpdate()

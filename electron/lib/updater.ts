@@ -24,6 +24,7 @@ let pendingUpdate: { version: string; downloadUrl: string; checksum: string | nu
 let onProgress: ((p: UpdateProgress) => void) | null = null
 let downloadAbort: AbortController | null = null
 let updateActive = false
+let activeUpdateRequired = false
 
 export function setUpdateProgressHandler(fn: ((p: UpdateProgress) => void) | null) {
   onProgress = fn
@@ -47,6 +48,12 @@ export function setPendingUpdate(info: typeof pendingUpdate) {
 
 export function isUpdateActive() {
   return updateActive
+}
+
+/** Whether the in-flight update is required — used to block the window from
+ * closing mid-update instead of silently abandoning a mandatory update. */
+export function isRequiredUpdateActive() {
+  return updateActive && activeUpdateRequired
 }
 
 export async function fetchLatestUpdate() {
@@ -257,11 +264,12 @@ export function cancelUpdate(): { ok: boolean; error?: string } {
     downloadAbort = null
   }
   updateActive = false
+  activeUpdateRequired = false
   emit({ phase: 'cancelled', percent: 0, message: 'Update cancelled' })
   return { ok: true }
 }
 
-export async function startUpdate(version?: string) {
+export async function startUpdate(version?: string, required?: boolean) {
   if (!app.isPackaged) {
     const err = 'Updates are only available in the packaged app.'
     emit({ phase: 'error', percent: 0, message: 'Update failed', error: err })
@@ -292,6 +300,7 @@ export async function startUpdate(version?: string) {
   const exeName = path.basename(process.execPath)
 
   updateActive = true
+  activeUpdateRequired = !!required
   downloadAbort = new AbortController()
 
   try {
@@ -325,6 +334,7 @@ export async function startUpdate(version?: string) {
   } catch (err) {
     downloadAbort = null
     updateActive = false
+    activeUpdateRequired = false
     if (
       err instanceof Error &&
       (err.name === 'AbortError' || err.message === 'Download cancelled')

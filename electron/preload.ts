@@ -129,7 +129,7 @@ const api = {
   checkUpdates: () => ipcRenderer.invoke('updates:check'),
   fetchPendingUpdate: () => ipcRenderer.invoke('updates:fetch'),
   getPendingUpdate: () => ipcRenderer.invoke('updates:pending'),
-  startUpdate: (version?: string) => ipcRenderer.invoke('updates:start', version),
+  startUpdate: (version?: string, required?: boolean) => ipcRenderer.invoke('updates:start', version, required),
   cancelUpdate: () => ipcRenderer.invoke('updates:cancel'),
   onUpdateAvailable: (cb: (...args: unknown[]) => void) => on('updates:available', cb),
   onUpdateProgress: (cb: (...args: unknown[]) => void) => on('updates:progress', cb),

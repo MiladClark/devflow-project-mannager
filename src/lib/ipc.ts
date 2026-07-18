@@ -172,7 +172,7 @@ export interface Api {
   checkUpdates(): Promise<UpdateCheckResult>
   fetchPendingUpdate(): Promise<{ ok: boolean; error?: string; pending?: unknown }>
   getPendingUpdate(): Promise<{ version: string; downloadUrl: string; checksum: string | null } | null>
-  startUpdate(version?: string): Promise<{ ok: boolean; error?: string }>
+  startUpdate(version?: string, required?: boolean): Promise<{ ok: boolean; error?: string }>
   cancelUpdate(): Promise<{ ok: boolean; error?: string }>
   onUpdateAvailable(cb: (payload: UpdateAvailablePayload) => void): () => void
   onUpdateProgress(cb: (progress: UpdateProgress) => void): () => void

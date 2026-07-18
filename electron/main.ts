@@ -25,7 +25,7 @@ import { createTray, refreshTrayMenu, destroyTray } from './lib/tray'
 import { loadBrandIcon, resolveBrandIconPath } from './lib/icon'
 import { startNotifications, stopNotifications } from './lib/notify'
 import { checkForUpdates } from './lib/updates'
-import { isQuittingForUpdate } from './lib/updater'
+import { isQuittingForUpdate, isRequiredUpdateActive } from './lib/updater'
 import { getLicenseState } from './lib/licensing'
 import { store } from './lib/store'
 
@@ -102,6 +102,15 @@ function createWindow() {
 
   win.on('close', (e) => {
     if (isQuittingForUpdate()) return
+    // A required update is mid-download/apply — closing here would abandon a
+    // mandatory update with no warning (the app would just re-prompt next
+    // launch, but the user closing to "get past" a required update shouldn't
+    // silently succeed). Hide instead of closing so it can finish.
+    if (isRequiredUpdateActive() && !quitting) {
+      e.preventDefault()
+      win?.hide()
+      return
+    }
     // hide to tray instead of closing when enabled (real quit sets `quitting`)
     if (store.getSettings().closeToTray && !quitting) {
       e.preventDefault()

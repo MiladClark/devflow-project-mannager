@@ -4,6 +4,12 @@ icon: build/icon.ico
 directories:
   output: release
   buildResources: build
+# Embed the brand icon into the packed .exe for every target (dir + nsis) and
+# every build path. Required because win.signAndEditExecutable is false, which
+# disables electron-builder's built-in rcedit icon step — without this the NSIS
+# Setup installer shipped a default-Electron-icon exe (wrong desktop/taskbar
+# icon). See scripts/afterPack.cjs.
+afterPack: scripts/afterPack.cjs
 compression: maximum
 electronLanguages:
   - en-US

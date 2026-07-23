@@ -275,7 +275,7 @@ export function ProjectDetail() {
                   <Tooltip
                     contentStyle={{ background: '#101a2e', border: '1px solid #1d2a44', borderRadius: 8 }}
                     labelFormatter={() => ''}
-                    formatter={(v: number) => [`${v.toFixed(1)}%`, 'CPU']}
+                    formatter={(v) => [`${Number(v).toFixed(1)}%`, 'CPU']}
                   />
                   <Area type="monotone" dataKey="cpu" stroke="#22d3ee" fill="#22d3ee22" strokeWidth={2} isAnimationActive={false} />
                 </AreaChart>
@@ -294,7 +294,7 @@ export function ProjectDetail() {
                   <Tooltip
                     contentStyle={{ background: '#101a2e', border: '1px solid #1d2a44', borderRadius: 8 }}
                     labelFormatter={() => ''}
-                    formatter={(v: number) => [formatBytes(v), 'Memory']}
+                    formatter={(v) => [formatBytes(Number(v)), 'Memory']}
                   />
                   <Area type="monotone" dataKey="mem" stroke="#34d399" fill="#34d39922" strokeWidth={2} isAnimationActive={false} />
                 </AreaChart>

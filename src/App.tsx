@@ -1,21 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from './state/store'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
 import { RightRail } from './components/RightRail'
-import { Dashboard } from './pages/Dashboard'
-import { Projects } from './pages/Projects'
-import { ProjectDetail } from './pages/ProjectDetail'
-import { Logs } from './pages/Logs'
-import { Database } from './pages/Database'
-import { Connections } from './pages/Connections'
-import { AppsTools } from './pages/AppsTools'
-import { Account } from './pages/Account'
-import { Settings } from './pages/Settings'
-import { NewProject } from './pages/NewProject'
-import { BuildSetup } from './pages/BuildSetup'
-import { SystemHealth } from './pages/SystemHealth'
+// Pages are code-split so the initial bundle stays small and the app paints
+// fast — heavy deps (recharts charts, the xterm terminal) only load with the
+// route that needs them. Named exports are adapted to the default export
+// React.lazy expects.
+const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })))
+const Projects = lazy(() => import('./pages/Projects').then((m) => ({ default: m.Projects })))
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail').then((m) => ({ default: m.ProjectDetail })))
+const Logs = lazy(() => import('./pages/Logs').then((m) => ({ default: m.Logs })))
+const Database = lazy(() => import('./pages/Database').then((m) => ({ default: m.Database })))
+const Connections = lazy(() => import('./pages/Connections').then((m) => ({ default: m.Connections })))
+const AppsTools = lazy(() => import('./pages/AppsTools').then((m) => ({ default: m.AppsTools })))
+const Account = lazy(() => import('./pages/Account').then((m) => ({ default: m.Account })))
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
+const NewProject = lazy(() => import('./pages/NewProject').then((m) => ({ default: m.NewProject })))
+const BuildSetup = lazy(() => import('./pages/BuildSetup').then((m) => ({ default: m.BuildSetup })))
+const SystemHealth = lazy(() => import('./pages/SystemHealth').then((m) => ({ default: m.SystemHealth })))
 import { LoginGate } from './components/LoginGate'
 import { OnboardingGate } from './components/OnboardingGate'
 import { Splash } from './components/Splash'
@@ -103,6 +107,7 @@ function Layout() {
         <Sidebar />
         <main className="min-w-0 flex-1 overflow-y-auto">
           <div key={location.pathname} className="animate-page-in h-full">
+            <Suspense fallback={null}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/projects" element={<Projects />} />
@@ -118,6 +123,7 @@ function Layout() {
               <Route path="/build" element={<BuildSetup />} />
               <Route path="/projects/:projectId/build" element={<BuildSetup />} />
             </Routes>
+            </Suspense>
           </div>
         </main>
         {showRail && <RightRail />}

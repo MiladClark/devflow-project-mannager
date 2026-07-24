@@ -10,6 +10,25 @@ directories:
 # Setup installer shipped a default-Electron-icon exe (wrong desktop/taskbar
 # icon). See scripts/afterPack.cjs.
 afterPack: scripts/afterPack.cjs
+# Electron Fuses — build-time security hardening flipped into the packaged binary.
+#  - enableEmbeddedAsarIntegrityValidation + onlyLoadAppFromAsar: the app.asar's
+#    hash is embedded in the exe and validated at load, so tampering with the
+#    bundled JS (e.g. editing the licensing/entitlements logic in the asar) makes
+#    the app refuse to launch. This blocks the trivial "unpack asar → edit →
+#    repack" bypass.
+#  - runAsNode / NodeOptions / NodeCliInspect disabled: prevents relaunching the
+#    app as a plain Node process or injecting/inspecting it to dump or patch the
+#    licensing logic at runtime.
+#  - enableCookieEncryption: encrypts the cookie store at rest.
+# NOTE: builds are unsigned, so a determined attacker can still re-flip fuses;
+# this raises the bar against casual tampering, not a motivated cracker.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 compression: maximum
 electronLanguages:
   - en-US

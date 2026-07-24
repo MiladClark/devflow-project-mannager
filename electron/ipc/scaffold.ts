@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
+import type { IPty } from 'node-pty'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { ScaffoldOptions, ScaffoldResult } from '../../src/shared/types'
@@ -19,6 +20,7 @@ function log(text: string, stream: 'out' | 'err' | 'sys' = 'out') {
 const SCAFFOLD_TIMEOUT_MS = 20 * 60 * 1000
 
 let activeScaffoldChild: ChildProcess | null = null
+let activeScaffoldPty: IPty | null = null
 let scaffoldCancelled = false
 let scaffoldInProgress = false
 
@@ -61,6 +63,13 @@ function cleanupPartialProject(projectDir: string) {
 function cancelActiveScaffold() {
   scaffoldCancelled = true
   if (activeScaffoldChild) killScaffoldChild(activeScaffoldChild)
+  if (activeScaffoldPty) {
+    try {
+      activeScaffoldPty.kill()
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function scaffoldWasCancelled(): boolean {
@@ -140,6 +149,106 @@ function run(cmd: string, cwd: string, timeoutMs = SCAFFOLD_TIMEOUT_MS): Promise
     const timer = setTimeout(() => {
       log(`Command timed out after ${Math.round(timeoutMs / 60000)} minutes`, 'err')
       killScaffoldChild(child)
+      finish(124)
+    }, timeoutMs)
+  })
+}
+
+/**
+ * Like run(), but executes inside a real pseudo-terminal via node-pty. Some
+ * scaffolding CLIs (notably create-payload-app) initialize a TTY on startup and
+ * crash with "uv_tty_init returned EBADF" when spawned with a non-TTY stdin —
+ * which then aborts before the project folder is created. A PTY gives them the
+ * terminal they expect. All prompt flags are still passed, so nothing should ask
+ * for input; INTERACTIVE_PROMPT_RE remains as a safety net. Falls back to plain
+ * run() if node-pty can't be loaded.
+ */
+async function runPty(cmd: string, cwd: string, timeoutMs = SCAFFOLD_TIMEOUT_MS): Promise<number> {
+  if (scaffoldWasCancelled()) return 130
+  let pty: typeof import('node-pty')
+  try {
+    pty = await import('node-pty')
+  } catch {
+    log('node-pty unavailable — falling back to a non-interactive shell.', 'sys')
+    return run(cmd, cwd, timeoutMs)
+  }
+
+  log(`$ ${cmd}`, 'sys')
+  return new Promise<number>((resolve) => {
+    const isWin = process.platform === 'win32'
+    const file = isWin ? process.env.ComSpec || 'cmd.exe' : '/bin/sh'
+    const args = isWin ? ['/d', '/s', '/c', cmd] : ['-c', cmd]
+
+    let proc: IPty
+    try {
+      proc = pty.spawn(file, args, {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 30,
+        cwd,
+        env: scaffoldEnv() as Record<string, string>,
+      })
+    } catch (err) {
+      log(`Failed to start command: ${err instanceof Error ? err.message : String(err)}`, 'err')
+      resolve(1)
+      return
+    }
+
+    activeScaffoldPty = proc
+    let settled = false
+    let sawInteractivePrompt = false
+    let lineBuf = ''
+
+    const finish = (code: number) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (activeScaffoldPty === proc) activeScaffoldPty = null
+      resolve(code)
+    }
+
+    const handleLine = (raw: string) => {
+      // Strip CSI + OSC escape sequences the PTY emits.
+      const trimmed = raw
+        .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
+        .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+        .trim()
+      if (!trimmed) return
+      log(trimmed, 'out')
+      if (INTERACTIVE_PROMPT_RE.test(trimmed)) {
+        sawInteractivePrompt = true
+        log(
+          'Interactive CLI prompt detected — aborting because DevFlow cannot answer terminal prompts.',
+          'err',
+        )
+        try {
+          proc.kill()
+        } catch {
+          /* ignore */
+        }
+        finish(130)
+      }
+    }
+
+    proc.onData((data) => {
+      lineBuf += data
+      const parts = lineBuf.split(/\r?\n/)
+      lineBuf = parts.pop() ?? ''
+      for (const p of parts) handleLine(p)
+    })
+    proc.onExit(({ exitCode }) => {
+      if (lineBuf) handleLine(lineBuf)
+      if (scaffoldWasCancelled() || sawInteractivePrompt) finish(130)
+      else finish(exitCode ?? 1)
+    })
+
+    const timer = setTimeout(() => {
+      log(`Command timed out after ${Math.round(timeoutMs / 60000)} minutes`, 'err')
+      try {
+        proc.kill()
+      } catch {
+        /* ignore */
+      }
       finish(124)
     }, timeoutMs)
   })
@@ -438,7 +547,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
     if (opts.cms === 'payload') {
       log('Stage 1/4: Scaffolding Payload CMS project...', 'sys')
       // Payload is a code-first CMS embedded in its own Next.js app (TypeScript only)
-      const code = await run(
+      const code = await runPty(
         `npx --yes create-payload-app@latest -n "${opts.name}" -t blank --db sqlite --use-npm -y`,
         opts.parentDir,
       )
@@ -454,7 +563,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
       log('Stage 1/4: Scaffolding Strapi CMS project...', 'sys')
       // Strapi is a standalone headless CMS service (default port 1337)
       const lang = opts.typescript ? '--typescript' : '--javascript'
-      const code = await run(
+      const code = await runPty(
         `npx --yes create-strapi-app@latest "${opts.name}" --quickstart --no-run --skip-cloud --use-npm ${lang}`,
         opts.parentDir,
       )
@@ -478,7 +587,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
         '--use-npm',
         '--yes',
       ].join(' ')
-      const code = await run(`npx --yes create-next-app@latest "${opts.name}" ${flags}`, opts.parentDir)
+      const code = await runPty(`npx --yes create-next-app@latest "${opts.name}" ${flags}`, opts.parentDir)
       {
         const fail = runFailure(
           code,
@@ -491,7 +600,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
       log('Stage 1/4: Scaffolding Electron project...', 'sys')
       const template = opts.typescript ? 'react-ts' : 'react'
       // npm create passes flags reliably; --skip disables updater/mirror prompts.
-      let code = await run(
+      let code = await runPty(
         `npm create @quick-start/electron@latest "${opts.name}" -- --template ${template} --skip`,
         opts.parentDir,
       )
@@ -525,7 +634,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
           : opts.framework === 'vite-vue'
             ? opts.typescript ? 'vue-ts' : 'vue'
             : opts.typescript ? 'vanilla-ts' : 'vanilla'
-      let code = await run(`npm create vite@latest "${opts.name}" -- --template ${template}`, opts.parentDir)
+      let code = await runPty(`npm create vite@latest "${opts.name}" -- --template ${template}`, opts.parentDir)
       {
         const fail = runFailure(
           code,
@@ -549,6 +658,16 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
         addTailwindToVite(projectDir)
       }
     }
+    // The create tool reported success but never produced the project folder —
+    // running the add-on installs below with a non-existent cwd is what used to
+    // surface as a cryptic "spawn cmd.exe ENOENT". Fail clearly instead.
+    if (!fs.existsSync(projectDir)) {
+      return {
+        ok: false,
+        error: `The scaffolding tool finished without creating "${opts.name}" at ${projectDir}. It likely failed above — check the terminal logs.`,
+      }
+    }
+
     if (opts.cms === 'decap') {
       log('Stage 3/4: Adding Decap CMS files...', 'sys')
       addDecapCms(projectDir, opts.framework)

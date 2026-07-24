@@ -3,7 +3,9 @@ import {
   cancelUpdate,
   fetchLatestUpdate,
   getPendingUpdate,
-  resetUpdateState,
+  installPendingUpdate,
+  pauseUpdate,
+  resumeUpdate,
   setUpdateProgressHandler,
   startUpdate,
   type UpdateProgress,
@@ -39,12 +41,10 @@ export function registerUpdateHandlers() {
   ipcMain.handle('updates:pending', () => getPendingUpdate())
 
   ipcMain.handle('updates:start', (_e, version?: string, required?: boolean) => startUpdate(version, required))
-
-  ipcMain.handle('updates:cancel', () => {
-    const res = cancelUpdate()
-    if (res.ok) resetUpdateState()
-    return res
-  })
+  ipcMain.handle('updates:pause', () => pauseUpdate())
+  ipcMain.handle('updates:resume', () => resumeUpdate())
+  ipcMain.handle('updates:install', () => installPendingUpdate())
+  ipcMain.handle('updates:cancel', () => cancelUpdate())
 }
 
 export function notifyUpdateAvailable(payload: {

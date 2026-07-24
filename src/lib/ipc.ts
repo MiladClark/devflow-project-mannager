@@ -173,6 +173,9 @@ export interface Api {
   fetchPendingUpdate(): Promise<{ ok: boolean; error?: string; pending?: unknown }>
   getPendingUpdate(): Promise<{ version: string; downloadUrl: string; checksum: string | null } | null>
   startUpdate(version?: string, required?: boolean): Promise<{ ok: boolean; error?: string }>
+  pauseUpdate(): Promise<{ ok: boolean; error?: string }>
+  resumeUpdate(): Promise<{ ok: boolean; error?: string }>
+  installUpdate(): Promise<{ ok: boolean; error?: string }>
   cancelUpdate(): Promise<{ ok: boolean; error?: string }>
   onUpdateAvailable(cb: (payload: UpdateAvailablePayload) => void): () => void
   onUpdateProgress(cb: (progress: UpdateProgress) => void): () => void
@@ -593,6 +596,9 @@ function createMockApi(): Api {
     fetchPendingUpdate: async () => ({ ok: false }),
     getPendingUpdate: async () => null,
     startUpdate: async () => ({ ok: false, error: 'Not available in browser preview' }),
+    pauseUpdate: async () => ({ ok: false, error: 'Not available in browser preview' }),
+    resumeUpdate: async () => ({ ok: false, error: 'Not available in browser preview' }),
+    installUpdate: async () => ({ ok: false, error: 'Not available in browser preview' }),
     cancelUpdate: async () => ({ ok: false, error: 'Not available in browser preview' }),
     onUpdateAvailable: () => () => {},
     onUpdateProgress: () => () => {},

@@ -10,7 +10,16 @@ import { checkForUpdates } from './updates'
 import { getLicenseState } from './licensing'
 import { stopAll } from '../ipc/runner'
 
-export type UpdatePhase = 'idle' | 'downloading' | 'verifying' | 'applying' | 'restarting' | 'error' | 'cancelled'
+export type UpdatePhase =
+  | 'idle'
+  | 'downloading'
+  | 'paused'
+  | 'verifying'
+  | 'ready'
+  | 'applying'
+  | 'restarting'
+  | 'error'
+  | 'cancelled'
 
 export interface UpdateProgress {
   phase: UpdatePhase
@@ -27,8 +36,12 @@ export interface UpdateProgress {
 let pendingUpdate: { version: string; downloadUrl: string; checksum: string | null } | null = null
 let onProgress: ((p: UpdateProgress) => void) | null = null
 let downloadAbort: AbortController | null = null
-let updateActive = false
+let updateActive = false // a download is in flight right now
 let activeUpdateRequired = false
+let readyToInstall = false // downloaded + verified, waiting for the user to install
+let currentZipPath: string | null = null // partial/complete download on disk
+let currentTotalBytes = 0 // total download size, retained across pause/resume
+let abortReason: 'pause' | 'cancel' | null = null
 
 export function setUpdateProgressHandler(fn: ((p: UpdateProgress) => void) | null) {
   onProgress = fn
@@ -51,13 +64,14 @@ export function setPendingUpdate(info: typeof pendingUpdate) {
 }
 
 export function isUpdateActive() {
-  return updateActive
+  return updateActive || readyToInstall
 }
 
-/** Whether the in-flight update is required — used to block the window from
- * closing mid-update instead of silently abandoning a mandatory update. */
+/** Whether a required update is downloading or waiting to be installed — used to
+ * block the window from closing mid-update instead of silently abandoning a
+ * mandatory update. */
 export function isRequiredUpdateActive() {
-  return updateActive && activeUpdateRequired
+  return (updateActive || readyToInstall) && activeUpdateRequired
 }
 
 export async function fetchLatestUpdate() {
@@ -92,28 +106,52 @@ interface DownloadTick {
   bytesPerSec: number
 }
 
+/**
+ * Download `url` to `dest`, resuming from `startByte` when > 0 via an HTTP Range
+ * request (append to the existing partial file). If the server ignores the
+ * Range (responds 200 instead of 206) it falls back to a full download that
+ * overwrites the file. Returns the final total size.
+ */
 async function downloadUpdate(
   url: string,
   dest: string,
   signal: AbortSignal,
   onTick: (t: DownloadTick) => void,
-) {
-  const res = await fetch(url, { signal })
+  startByte = 0,
+  knownTotal = 0,
+): Promise<{ total: number }> {
+  const headers: Record<string, string> = {}
+  if (startByte > 0) headers.Range = `bytes=${startByte}-`
+  const res = await fetch(url, { signal, headers })
   if (!res.ok || !res.body) throw new Error(`Download failed (HTTP ${res.status})`)
 
-  const total = Number(res.headers.get('content-length') ?? 0)
+  let append = false
+  let total = knownTotal
+  if (startByte > 0 && res.status === 206) {
+    // Partial content — resume: append and read the true total from Content-Range.
+    append = true
+    const cr = res.headers.get('content-range')
+    const m = cr ? /\/(\d+)\s*$/.exec(cr) : null
+    if (m) total = Number(m[1])
+    else if (!total) total = startByte + Number(res.headers.get('content-length') ?? 0)
+  } else {
+    // Fresh download (or server ignored Range) — overwrite from the start.
+    startByte = 0
+    total = Number(res.headers.get('content-length') ?? 0)
+  }
+
   const indeterminate = total <= 0
-  let received = 0
+  let received = startByte
   // Throttle UI updates to ~5/s and derive speed from the delta between ticks.
   let lastEmitAt = Date.now()
-  let lastEmitBytes = 0
+  let lastEmitBytes = received
   const nodeStream = Readable.fromWeb(res.body as import('stream/web').ReadableStream)
 
   await pipeline(
     nodeStream,
     async function* (source) {
       for await (const chunk of source) {
-        if (signal.aborted) throw new Error('Download cancelled')
+        if (signal.aborted) throw new Error('Download aborted')
         received += chunk.length
         const now = Date.now()
         if (now - lastEmitAt >= 200) {
@@ -132,9 +170,10 @@ async function downloadUpdate(
         yield chunk
       }
     },
-    fs.createWriteStream(dest),
+    fs.createWriteStream(dest, append ? { flags: 'a' } : {}),
   )
   onTick({ percent: 100, indeterminate: false, received, total: total || received, bytesPerSec: 0 })
+  return { total: total || received }
 }
 
 async function verifyChecksum(file: string, expected: string) {
@@ -305,27 +344,141 @@ Log "=== DevFlow update apply finished ==="
   child.unref()
 }
 
-export function cancelUpdate(): { ok: boolean; error?: string } {
-  if (!updateActive) return { ok: false, error: 'No update in progress' }
-  if (downloadAbort) {
-    downloadAbort.abort()
-    downloadAbort = null
+function cleanupDownload() {
+  if (currentZipPath) {
+    try {
+      fs.unlinkSync(currentZipPath)
+    } catch {
+      /* ignore */
+    }
   }
-  updateActive = false
-  activeUpdateRequired = false
-  emit({ phase: 'cancelled', percent: 0, message: 'Update cancelled' })
-  return { ok: true }
+  currentZipPath = null
+  currentTotalBytes = 0
+  readyToInstall = false
 }
 
+/**
+ * Download (or resume) the pending update and verify it, then stop at the
+ * `ready` phase — the actual install is a separate, user-confirmed step
+ * (installPendingUpdate). Pausing keeps the partial file for a later resume;
+ * cancelling deletes it.
+ */
+async function runDownloadAndVerify(resume: boolean) {
+  const info = pendingUpdate!
+  const zipPath = currentZipPath!
+
+  updateActive = true
+  abortReason = null
+  downloadAbort = new AbortController()
+
+  let startByte = 0
+  if (resume) {
+    try {
+      startByte = fs.statSync(zipPath).size
+    } catch {
+      startByte = 0
+    }
+  }
+
+  try {
+    emit({
+      phase: 'downloading',
+      percent: startByte && currentTotalBytes ? Math.round((startByte / currentTotalBytes) * 100) : 0,
+      message: 'Downloading update…',
+      version: info.version,
+      bytesReceived: startByte,
+      bytesTotal: currentTotalBytes || undefined,
+    })
+    const { total } = await downloadUpdate(
+      info.downloadUrl,
+      zipPath,
+      downloadAbort.signal,
+      (t) => {
+        currentTotalBytes = t.total || currentTotalBytes
+        emit({
+          phase: 'downloading',
+          percent: t.indeterminate ? 0 : t.percent,
+          message: 'Downloading update…',
+          version: info.version,
+          bytesReceived: t.received,
+          bytesTotal: t.total || undefined,
+          bytesPerSec: t.bytesPerSec,
+        })
+      },
+      startByte,
+      currentTotalBytes,
+    )
+    currentTotalBytes = total || currentTotalBytes
+    downloadAbort = null
+
+    if (!info.checksum) {
+      throw new Error('Update rejected: server did not provide a SHA-256 checksum.')
+    }
+    emit({ phase: 'verifying', percent: 100, message: 'Verifying update…', version: info.version })
+    await verifyChecksum(zipPath, info.checksum)
+
+    updateActive = false
+    readyToInstall = true
+    emit({
+      phase: 'ready',
+      percent: 100,
+      message: 'Update ready to install',
+      version: info.version,
+      bytesReceived: currentTotalBytes || undefined,
+      bytesTotal: currentTotalBytes || undefined,
+    })
+    return { ok: true }
+  } catch (err) {
+    downloadAbort = null
+    updateActive = false
+    const aborted =
+      err instanceof Error && (err.name === 'AbortError' || /abort/i.test(err.message))
+
+    if (aborted && abortReason === 'pause') {
+      let received = 0
+      try {
+        received = fs.statSync(zipPath).size
+      } catch {
+        /* ignore */
+      }
+      emit({
+        phase: 'paused',
+        percent: currentTotalBytes ? Math.round((received / currentTotalBytes) * 100) : 0,
+        message: 'Update paused',
+        version: info.version,
+        bytesReceived: received,
+        bytesTotal: currentTotalBytes || undefined,
+      })
+      return { ok: false, error: 'paused' }
+    }
+
+    if (aborted) {
+      cleanupDownload()
+      activeUpdateRequired = false
+      emit({ phase: 'cancelled', percent: 0, message: 'Update cancelled', version: info.version })
+      return { ok: false, error: 'Update cancelled' }
+    }
+
+    cleanupDownload()
+    const error = err instanceof Error ? err.message : String(err)
+    emit({ phase: 'error', percent: 0, message: 'Update failed', error, version: info.version })
+    return { ok: false, error }
+  }
+}
+
+/** Begin (or restart) a download of the pending update. */
 export async function startUpdate(version?: string, required?: boolean) {
   if (!app.isPackaged) {
     const err = 'Updates are only available in the packaged app.'
     emit({ phase: 'error', percent: 0, message: 'Update failed', error: err })
     return { ok: false, error: err }
   }
+  if (updateActive) return { ok: false, error: 'Update already in progress' }
 
-  if (updateActive) {
-    return { ok: false, error: 'Update already in progress' }
+  // Already downloaded and verified — just re-announce the ready state.
+  if (readyToInstall && pendingUpdate) {
+    emit({ phase: 'ready', percent: 100, message: 'Update ready to install', version: pendingUpdate.version })
+    return { ok: true }
   }
 
   if (!pendingUpdate) {
@@ -343,70 +496,75 @@ export async function startUpdate(version?: string, required?: boolean) {
     return { ok: false, error: err }
   }
 
-  const zipPath = path.join(os.tmpdir(), `devflow-update-${info.version}.zip`)
+  activeUpdateRequired = !!required
+  currentZipPath = path.join(os.tmpdir(), `devflow-update-${info.version}.zip`)
+  currentTotalBytes = 0
+  readyToInstall = false
+  // Fresh start — drop any stale partial from a previous attempt.
+  try {
+    fs.unlinkSync(currentZipPath)
+  } catch {
+    /* ignore */
+  }
+  return runDownloadAndVerify(false)
+}
+
+/** Resume a paused download from where it left off. */
+export async function resumeUpdate() {
+  if (!app.isPackaged) return { ok: false, error: 'Updates are only available in the packaged app.' }
+  if (updateActive) return { ok: false, error: 'Update already in progress' }
+  if (!pendingUpdate || !currentZipPath) return { ok: false, error: 'Nothing to resume' }
+  return runDownloadAndVerify(true)
+}
+
+/** Pause the in-flight download, keeping the partial file for a later resume. */
+export function pauseUpdate(): { ok: boolean; error?: string } {
+  if (!updateActive || !downloadAbort) return { ok: false, error: 'No active download' }
+  abortReason = 'pause'
+  downloadAbort.abort()
+  downloadAbort = null
+  return { ok: true }
+}
+
+/** Cancel the update entirely (works while downloading, paused, or ready). */
+export function cancelUpdate(): { ok: boolean; error?: string } {
+  if (updateActive && downloadAbort) {
+    // The runDownloadAndVerify catch handles cleanup + the 'cancelled' emit.
+    abortReason = 'cancel'
+    downloadAbort.abort()
+    downloadAbort = null
+    return { ok: true }
+  }
+  // Paused or ready: no in-flight request, so tear down directly.
+  cleanupDownload()
+  updateActive = false
+  activeUpdateRequired = false
+  emit({ phase: 'cancelled', percent: 0, message: 'Update cancelled' })
+  return { ok: true }
+}
+
+/** Apply the already-downloaded update: stop projects, launch the apply script,
+ * and quit so the script can replace files and relaunch. */
+export async function installPendingUpdate(): Promise<{ ok: boolean; error?: string }> {
+  if (!app.isPackaged) return { ok: false, error: 'Updates are only available in the packaged app.' }
+  if (!readyToInstall || !currentZipPath || !pendingUpdate) {
+    return { ok: false, error: 'No update is ready to install' }
+  }
   const installDir = getInstallDir()
   const exeName = path.basename(process.execPath)
+  const version = pendingUpdate.version
 
-  updateActive = true
-  activeUpdateRequired = !!required
-  downloadAbort = new AbortController()
+  emit({ phase: 'applying', percent: 100, message: 'Applying update…', version })
+  spawnApplyScript(currentZipPath, installDir, exeName)
 
-  try {
-    emit({ phase: 'downloading', percent: 0, message: 'Downloading update…', version: info.version })
-    await downloadUpdate(info.downloadUrl, zipPath, downloadAbort.signal, (t) => {
-      emit({
-        phase: 'downloading',
-        percent: t.indeterminate ? 0 : t.percent,
-        message: 'Downloading update…',
-        version: info.version,
-        bytesReceived: t.received,
-        bytesTotal: t.total,
-        bytesPerSec: t.bytesPerSec,
-      })
-    })
-    downloadAbort = null
+  emit({ phase: 'restarting', percent: 100, message: 'Restarting DevFlow…', version })
+  pendingUpdate = null
+  readyToInstall = false
 
-    if (!info.checksum) {
-      throw new Error('Update rejected: server did not provide a SHA-256 checksum.')
-    }
-    emit({ phase: 'verifying', percent: 100, message: 'Verifying update…', version: info.version })
-    await verifyChecksum(zipPath, info.checksum)
-
-    emit({ phase: 'applying', percent: 100, message: 'Applying update…', version: info.version })
-    spawnApplyScript(zipPath, installDir, exeName)
-
-    emit({ phase: 'restarting', percent: 100, message: 'Restarting DevFlow…', version: info.version })
-    pendingUpdate = null
-
-    quittingForUpdate = true
-    await stopAll()
-    setTimeout(() => app.quit(), 400)
-    return { ok: true }
-  } catch (err) {
-    downloadAbort = null
-    updateActive = false
-    activeUpdateRequired = false
-    if (
-      err instanceof Error &&
-      (err.name === 'AbortError' || err.message === 'Download cancelled')
-    ) {
-      emit({ phase: 'cancelled', percent: 0, message: 'Update cancelled', version: info.version })
-      try {
-        fs.unlinkSync(zipPath)
-      } catch {
-        /* ignore */
-      }
-      return { ok: false, error: 'Update cancelled' }
-    }
-    const error = err instanceof Error ? err.message : String(err)
-    emit({ phase: 'error', percent: 0, message: 'Update failed', error, version: info.version })
-    try {
-      fs.unlinkSync(zipPath)
-    } catch {
-      /* ignore */
-    }
-    return { ok: false, error }
-  }
+  quittingForUpdate = true
+  await stopAll()
+  setTimeout(() => app.quit(), 400)
+  return { ok: true }
 }
 
 /** Set by updater before quit so before-quit handlers skip tray hide. */
@@ -417,5 +575,9 @@ export function isQuittingForUpdate() {
 
 export function resetUpdateState() {
   updateActive = false
+  readyToInstall = false
+  activeUpdateRequired = false
+  abortReason = null
   downloadAbort = null
+  cleanupDownload()
 }

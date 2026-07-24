@@ -490,6 +490,10 @@ export interface UpdateProgress {
   message: string
   version?: string
   error?: string
+  /** Download progress detail (downloading phase only). */
+  bytesReceived?: number
+  bytesTotal?: number
+  bytesPerSec?: number
 }
 
 export interface UpdateAvailablePayload {

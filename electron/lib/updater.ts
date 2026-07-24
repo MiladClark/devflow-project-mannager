@@ -18,6 +18,10 @@ export interface UpdateProgress {
   message: string
   version?: string
   error?: string
+  /** Download progress detail (downloading phase only). */
+  bytesReceived?: number
+  bytesTotal?: number
+  bytesPerSec?: number
 }
 
 let pendingUpdate: { version: string; downloadUrl: string; checksum: string | null } | null = null
@@ -80,13 +84,29 @@ export async function fetchLatestUpdate() {
   return { ok: true as const, result: res, pending: pendingUpdate }
 }
 
-async function downloadUpdate(url: string, dest: string, signal: AbortSignal, onPct: (n: number, indeterminate: boolean) => void) {
+interface DownloadTick {
+  percent: number
+  indeterminate: boolean
+  received: number
+  total: number
+  bytesPerSec: number
+}
+
+async function downloadUpdate(
+  url: string,
+  dest: string,
+  signal: AbortSignal,
+  onTick: (t: DownloadTick) => void,
+) {
   const res = await fetch(url, { signal })
   if (!res.ok || !res.body) throw new Error(`Download failed (HTTP ${res.status})`)
 
   const total = Number(res.headers.get('content-length') ?? 0)
   const indeterminate = total <= 0
   let received = 0
+  // Throttle UI updates to ~5/s and derive speed from the delta between ticks.
+  let lastEmitAt = Date.now()
+  let lastEmitBytes = 0
   const nodeStream = Readable.fromWeb(res.body as import('stream/web').ReadableStream)
 
   await pipeline(
@@ -95,17 +115,26 @@ async function downloadUpdate(url: string, dest: string, signal: AbortSignal, on
       for await (const chunk of source) {
         if (signal.aborted) throw new Error('Download cancelled')
         received += chunk.length
-        if (total > 0) {
-          onPct(Math.min(99, Math.round((received / total) * 100)), false)
-        } else {
-          onPct(0, true)
+        const now = Date.now()
+        if (now - lastEmitAt >= 200) {
+          const secs = (now - lastEmitAt) / 1000
+          const bytesPerSec = secs > 0 ? Math.round((received - lastEmitBytes) / secs) : 0
+          onTick({
+            percent: total > 0 ? Math.min(99, Math.round((received / total) * 100)) : 0,
+            indeterminate,
+            received,
+            total,
+            bytesPerSec,
+          })
+          lastEmitAt = now
+          lastEmitBytes = received
         }
         yield chunk
       }
     },
     fs.createWriteStream(dest),
   )
-  onPct(100, false)
+  onTick({ percent: 100, indeterminate: false, received, total: total || received, bytesPerSec: 0 })
 }
 
 async function verifyChecksum(file: string, expected: string) {
@@ -218,9 +247,16 @@ if (Get-Process -Id $parentPid -ErrorAction SilentlyContinue) {
   Log "WARN parent process $parentPid still running after wait"
 }
 
+# Stop every process still running from the install dir so no file stays locked
+# (the app's own children, and node-pty helpers under resources\\...). A leftover
+# lock is the usual reason the mirror below fails and the app never relaunches.
 Get-Process -Name '${processBaseName.replace(/'/g, "''")}' -ErrorAction SilentlyContinue |
   Where-Object { $_.Id -ne $PID } |
-  ForEach-Object { Log "Stopping other instance PID $($_.Id)"; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+  ForEach-Object { Log "Stopping instance PID $($_.Id)"; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+Get-Process -ErrorAction SilentlyContinue |
+  Where-Object { $_.Id -ne $PID -and $(try { $_.Path -and $_.Path.StartsWith($dest, [System.StringComparison]::OrdinalIgnoreCase) } catch { $false }) } |
+  ForEach-Object { Log "Stopping install-dir process $($_.Id) ($($_.ProcessName))"; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Milliseconds 1500
 
 if (Test-Path $staging) { Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue }
 New-Item -ItemType Directory -Path $staging -Force | Out-Null
@@ -230,17 +266,29 @@ Log "Expanded archive to staging"
 $inner = Get-ChildItem $staging
 if ($inner.Count -eq 1 -and $inner[0].PSIsContainer) { $staging = $inner[0].FullName }
 
-robocopy $staging $dest /MIR /R:3 /W:2 /NFL /NDL /NJH /NJS /NC /NS /NP 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
-$rc = $LASTEXITCODE
-Log "robocopy exit code $rc"
+# Mirror with retries — a lingering file lock is the usual transient failure.
+$rc = 16
+for ($attempt = 1; $attempt -le 3; $attempt++) {
+  robocopy $staging $dest /MIR /R:5 /W:3 /NFL /NDL /NJH /NJS /NC /NS /NP 2>&1 | Out-File -Append -FilePath $log -Encoding utf8
+  $rc = $LASTEXITCODE
+  Log "robocopy attempt $attempt exit code $rc"
+  if ($rc -lt 8) { break }
+  Start-Sleep -Seconds 2
+}
 if ($rc -ge 8) {
-  Log "ERROR robocopy failed with code $rc"
+  Log "ERROR robocopy failed after retries with code $rc"
   exit 1
 }
 
+# Relaunch the freshly-installed app so the user always lands back in DevFlow.
 $exePath = Join-Path $dest $exe
 Log "Starting $exePath"
-Start-Process -FilePath $exePath
+try {
+  Start-Process -FilePath $exePath -WorkingDirectory $dest
+  Log "Relaunch issued"
+} catch {
+  Log "ERROR relaunch failed: $($_.Exception.Message)"
+}
 Remove-Item $zip -Force -ErrorAction SilentlyContinue
 Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $PSCommandPath -Force -ErrorAction SilentlyContinue
@@ -305,12 +353,15 @@ export async function startUpdate(version?: string, required?: boolean) {
 
   try {
     emit({ phase: 'downloading', percent: 0, message: 'Downloading update…', version: info.version })
-    await downloadUpdate(info.downloadUrl, zipPath, downloadAbort.signal, (percent, indeterminate) => {
+    await downloadUpdate(info.downloadUrl, zipPath, downloadAbort.signal, (t) => {
       emit({
         phase: 'downloading',
-        percent: indeterminate ? 0 : percent,
-        message: indeterminate ? 'Downloading update…' : 'Downloading update…',
+        percent: t.indeterminate ? 0 : t.percent,
+        message: 'Downloading update…',
         version: info.version,
+        bytesReceived: t.received,
+        bytesTotal: t.total,
+        bytesPerSec: t.bytesPerSec,
       })
     })
     downloadAbort = null

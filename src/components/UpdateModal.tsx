@@ -1,6 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import type { UpdateProgress } from '../shared/types'
+import { formatBytes } from '../lib/format'
 import logoBlue from '../assets/logo-blue.svg'
 import { FramelessChrome } from './FramelessChrome'
 
@@ -71,6 +72,19 @@ export function UpdateModal({
               {busy && <Loader2 size={14} className="animate-spin text-accent" />}
               {progress.message || PHASE_LABEL[progress.phase]}
             </p>
+            {progress.phase === 'downloading' && !!progress.bytesTotal && (
+              <p className="mt-1 flex items-center justify-center gap-1.5 text-xs tabular-nums text-slate-500">
+                <span>
+                  {formatBytes(progress.bytesReceived ?? 0)} / {formatBytes(progress.bytesTotal)}
+                </span>
+                {!!progress.bytesPerSec && (
+                  <>
+                    <span className="text-slate-700">•</span>
+                    <span>{formatBytes(progress.bytesPerSec)}/s</span>
+                  </>
+                )}
+              </p>
+            )}
             {progress.error && <p className="mt-2 text-center text-sm text-rose-400">{progress.error}</p>}
           </div>
 

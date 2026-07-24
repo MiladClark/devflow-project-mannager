@@ -22,7 +22,23 @@ export default defineConfig({
         // Vite 8 / Rolldown emits main.js plus sibling CJS chunks in
         // dist-electron/; they resolve via relative require and are all bundled
         // into the asar (files: dist-electron/**), so this is safe.
-        vite: { build: { outDir: 'dist-electron', rollupOptions: { external: ['node-pty'] } } },
+        vite: {
+          build: {
+            outDir: 'dist-electron',
+            // node-pty is a native module and MUST stay external — if bundled,
+            // its internal `require('./prebuilds/<plat>/<name>.node')` resolves
+            // relative to the bundle in dist-electron/ instead of
+            // node_modules/node-pty/ and fails to load (breaks the terminal AND
+            // the PTY-based scaffolder). This MUST live under `rolldownOptions`,
+            // not `rollupOptions`: vite-plugin-electron's defaults create
+            // `build.rolldownOptions` on Vite 8, and it reads
+            // `rolldownOptions || rollupOptions` — so an external placed in
+            // `rollupOptions` is silently ignored and node-pty gets bundled.
+            rolldownOptions: {
+              external: ['node-pty', /[\\/]node-pty[\\/]/, /\.node$/],
+            },
+          },
+        },
       },
       preload: {
         input: 'electron/preload.ts',

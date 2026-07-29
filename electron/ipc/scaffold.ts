@@ -26,7 +26,7 @@ let scaffoldInProgress = false
 
 /** Matches common prompts from create-* CLIs (prompts, inquirer, etc.). */
 const INTERACTIVE_PROMPT_RE =
-  /\?\s+(?:Select|Add|Enable|Project name|Package name|Overwrite|Which|Choose|Pick)\b|Use arrow-keys|Return to submit/i
+  /\?\s+(?:Select|Add|Enable|Project name|Package name|Overwrite|Which|Choose|Pick)\b|Use arrow-keys|Return to submit|^◆\s+\S/i
 
 function scaffoldEnv(): NodeJS.ProcessEnv {
   return {
@@ -547,8 +547,11 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
     if (opts.cms === 'payload') {
       log('Stage 1/4: Scaffolding Payload CMS project...', 'sys')
       // Payload is a code-first CMS embedded in its own Next.js app (TypeScript only)
+      // --db-connection-string and --no-agent are required even with -y:
+      // without them the CLI stops at interactive "Enter SQLite connection
+      // string" / "Select a coding agent" prompts.
       const code = await runPty(
-        `npx --yes create-payload-app@latest -n "${opts.name}" -t blank --db sqlite --use-npm -y`,
+        `npx --yes create-payload-app@latest -n "${opts.name}" -t blank --db sqlite --db-connection-string "file:./${opts.name}.db" --no-agent --use-npm -y`,
         opts.parentDir,
       )
       {

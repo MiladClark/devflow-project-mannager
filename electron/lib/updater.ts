@@ -336,11 +336,23 @@ Log "=== DevFlow update apply finished ==="
   fs.writeFileSync(scriptPath, script, 'utf-8')
   fs.appendFileSync(logPath, `\n--- apply script ${new Date().toISOString()} ---\n`, 'utf-8')
 
+  // NO `detached: true` here: DETACHED_PROCESS strips the console entirely and
+  // Windows PowerShell 5.1 then exits immediately WITHOUT running the script
+  // (exit 0, nothing logged) — which left the app closed and never updated.
+  // Without it, windowsHide gives the child its own hidden console and the
+  // orphaned process keeps running after the app quits.
   const child = spawn(
     'powershell.exe',
     ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', scriptPath],
-    { detached: true, stdio: 'ignore', windowsHide: true },
+    { stdio: 'ignore', windowsHide: true },
   )
+  child.once('error', (err) => {
+    try {
+      fs.appendFileSync(logPath, `ERROR failed to spawn powershell: ${err.message}\n`, 'utf-8')
+    } catch {
+      /* ignore */
+    }
+  })
   child.unref()
 }
 

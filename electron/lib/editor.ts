@@ -29,6 +29,14 @@ const EDITOR_BINARIES = {
   },
 } as const
 
+// Under `shell: true` the executable and args are concatenated into one command
+// string, so a resolved path with spaces ("...\Microsoft VS Code\bin\code.cmd",
+// "/Applications/Visual Studio Code.app/...") must be quoted or the shell splits
+// it at the first space.
+function quoteForShell(p: string): string {
+  return /\s/.test(p) ? `"${p}"` : p
+}
+
 function run(cmd: string, args: string[], env: NodeJS.ProcessEnv): Promise<boolean> {
   return new Promise((resolve) => {
     execFile(
@@ -48,12 +56,17 @@ async function resolveExecutable(editor: keyof typeof EDITOR_BINARIES): Promise<
   for (const p of def.paths) {
     const expanded = expandEnv(p, env)
     if (!existsSync(expanded)) continue
-    if (await run(expanded, ['--version'], env)) return expanded
+    const quoted = quoteForShell(expanded)
+    if (await run(quoted, ['--version'], env)) return quoted
   }
 
   if (editor === 'vscode' && process.platform === 'win32') {
-    const hit = await findOnPath('code', env, (p) => /microsoft vscode/i.test(p))
-    if (hit && (await run(hit, ['--version'], env))) return hit
+    // Default install dir is "Microsoft VS Code" (with spaces).
+    const hit = await findOnPath('code', env, (p) => /microsoft vs ?code/i.test(p))
+    if (hit) {
+      const quoted = quoteForShell(hit)
+      if (await run(quoted, ['--version'], env)) return quoted
+    }
     return null
   }
 
@@ -61,7 +74,10 @@ async function resolveExecutable(editor: keyof typeof EDITOR_BINARIES): Promise<
     // Cursor's own CLI is named `cursor`, but guard against a `code` shim
     // that resolves into a Cursor.app bundle rather than VS Code's.
     const hit = await findOnPath('code', env, (p) => !/cursor/i.test(p))
-    if (hit && (await run(hit, ['--version'], env))) return hit
+    if (hit) {
+      const quoted = quoteForShell(hit)
+      if (await run(quoted, ['--version'], env)) return quoted
+    }
     return null
   }
 
@@ -132,12 +148,16 @@ export async function openInEditor(
   }
 
   return new Promise((resolve) => {
+    // NO `detached` on Windows: DETACHED_PROCESS is unreliable for console hosts
+    // spawned from the packaged GUI app (see spawnApplyScript in updater.ts).
+    // windowsHide gives cmd.exe a hidden console instead, and unref() below is
+    // enough for the editor to outlive us.
     const child = spawn(executable, ['.'], {
       cwd: projectPath,
       shell: true,
       env,
       windowsHide: true,
-      detached: true,
+      detached: process.platform !== 'win32',
       stdio: 'ignore',
     })
     child.unref()

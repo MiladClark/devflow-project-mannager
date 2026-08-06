@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Trash2, ArrowDownToLine } from 'lucide-react'
+import { Trash2, ArrowDownToLine, Copy, Check, CornerDownLeft } from 'lucide-react'
 import type { LogLine } from '../shared/types'
 import { clockTime } from '../lib/format'
 
@@ -12,14 +12,21 @@ const streamClass: Record<LogLine['stream'], string> = {
 export function LogViewer({
   lines,
   onClear,
+  onInput,
+  inputPlaceholder = 'Type here to answer the installer…',
   height = 'h-96',
 }: {
   lines: LogLine[]
   onClear?: () => void
+  /** When provided, an input line is shown and what the user types is sent to the running process. */
+  onInput?: (data: string) => void
+  inputPlaceholder?: string
   height?: string
 }) {
   const [filter, setFilter] = useState('')
   const [autoScroll, setAutoScroll] = useState(true)
+  const [copied, setCopied] = useState(false)
+  const [input, setInput] = useState('')
   const ref = useRef<HTMLDivElement>(null)
 
   const visible = filter ? lines.filter((l) => l.text.toLowerCase().includes(filter.toLowerCase())) : lines
@@ -27,6 +34,27 @@ export function LogViewer({
   useEffect(() => {
     if (autoScroll && ref.current) ref.current.scrollTop = ref.current.scrollHeight
   }, [visible.length, autoScroll])
+
+  const copyAll = async () => {
+    // Copy the selection if there is one, otherwise the whole (filtered) log.
+    const selection = window.getSelection()?.toString()
+    const text = selection?.trim()
+      ? selection
+      : visible.map((l) => `${clockTime(l.ts)}  ${l.text}`).join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1400)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
+  const submit = () => {
+    if (!onInput) return
+    onInput(input + '\r')
+    setInput('')
+  }
 
   return (
     <div className="app-log-viewer">
@@ -38,6 +66,13 @@ export function LogViewer({
           placeholder="Filter..."
           className="app-log-filter"
         />
+        <button
+          title={copied ? 'Copied' : 'Copy selection or all output'}
+          onClick={copyAll}
+          className={`app-log-btn ${copied ? 'app-log-btn-active' : ''}`}
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />}
+        </button>
         <button
           title="Auto-scroll"
           onClick={() => setAutoScroll(!autoScroll)}
@@ -60,6 +95,28 @@ export function LogViewer({
           </div>
         ))}
       </div>
+      {onInput && (
+        <div className="app-log-input-row">
+          <span className="app-log-prompt">$</span>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                submit()
+              }
+            }}
+            placeholder={inputPlaceholder}
+            spellCheck={false}
+            autoComplete="off"
+            className="app-log-input"
+          />
+          <button title="Send (Enter)" onClick={submit} className="app-log-btn">
+            <CornerDownLeft size={14} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -35,6 +35,7 @@ const api = {
   // scaffold
   createProject: (opts: unknown) => ipcRenderer.invoke('scaffold:create', opts),
   cancelProjectCreation: () => ipcRenderer.invoke('scaffold:cancel'),
+  sendProjectCreationInput: (data: string) => ipcRenderer.invoke('scaffold:input', data),
   // ports / settings / activity
   checkPort: (port: number, excludeProjectId?: string) => ipcRenderer.invoke('ports:check', port, excludeProjectId),
   getPortOwner: (port: number) => ipcRenderer.invoke('ports:owner', port),

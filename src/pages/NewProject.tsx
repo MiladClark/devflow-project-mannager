@@ -17,7 +17,7 @@ import { PortConflict } from '../components/PortConflict'
 type FrameworkChoice = ScaffoldOptions['framework']
 
 const frameworks: { id: FrameworkChoice; name: string; desc: string }[] = [
-  { id: 'next', name: 'Next.js 15', desc: 'Full-stack React framework with App Router' },
+  { id: 'next', name: 'Next.js', desc: 'Full-stack React framework with App Router' },
   { id: 'vite-react', name: 'Vite + React', desc: 'Fast SPA development with React' },
   { id: 'vite-vue', name: 'Vite + Vue', desc: 'Fast SPA development with Vue 3' },
   { id: 'vite-vanilla', name: 'Vite Vanilla', desc: 'Plain TypeScript/JavaScript with Vite' },
@@ -421,7 +421,13 @@ export function NewProject() {
             </table>
           </div>
 
-          {(installing || installLog.length > 0) && <LogViewer lines={installLog} height="h-64" />}
+          {(installing || installLog.length > 0) && (
+            <LogViewer
+              lines={installLog}
+              height="h-64"
+              onInput={installing ? (data) => void api.sendProjectCreationInput(data) : undefined}
+            />
+          )}
 
           {error && (
             <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-300">{error}</div>

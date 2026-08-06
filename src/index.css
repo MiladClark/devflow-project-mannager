@@ -967,6 +967,32 @@ html[data-theme="clarkfloor"][data-mode="light"] .app-log-viewer {
   color: var(--log-fg);
   background-color: #0d1117;
   background-color: var(--log-bg);
+  /* The app body sets user-select:none; a terminal must stay selectable/copyable. */
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+.app-log-body ::selection {
+  background: color-mix(in srgb, var(--log-accent) 35%, transparent);
+}
+.app-log-input-row {
+  @apply flex shrink-0 items-center gap-2 border-t px-3 py-2;
+  border-color: #30363d;
+  border-color: var(--log-border);
+  background-color: #161b22;
+  background-color: var(--log-header);
+}
+.app-log-prompt {
+  @apply shrink-0 select-none font-mono text-[13px];
+  color: var(--log-accent);
+}
+.app-log-input {
+  @apply min-w-0 flex-1 bg-transparent font-mono text-[13px] outline-none;
+  color: #c9d1d9;
+  color: var(--log-fg);
+}
+.app-log-input::placeholder {
+  color: var(--log-muted);
 }
 .app-log-body::-webkit-scrollbar {
   width: 8px;

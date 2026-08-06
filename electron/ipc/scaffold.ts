@@ -18,11 +18,27 @@ function log(text: string, stream: 'out' | 'err' | 'sys' = 'out') {
 }
 
 const SCAFFOLD_TIMEOUT_MS = 20 * 60 * 1000
+/** How long a detected prompt waits for the user to type an answer before giving up. */
+const PROMPT_ANSWER_TIMEOUT_MS = 3 * 60 * 1000
 
 let activeScaffoldChild: ChildProcess | null = null
 let activeScaffoldPty: IPty | null = null
 let scaffoldCancelled = false
 let scaffoldInProgress = false
+/** Set while a PTY command is waiting on an answer; re-arms its no-answer timeout. */
+let promptDeadline: (() => void) | null = null
+
+/** Forward what the user typed in the install log panel to the running CLI. */
+function writeScaffoldInput(data: string): boolean {
+  if (!activeScaffoldPty) return false
+  try {
+    activeScaffoldPty.write(data)
+  } catch {
+    return false
+  }
+  promptDeadline?.()
+  return true
+}
 
 /** Matches common prompts from create-* CLIs (prompts, inquirer, etc.). */
 const INTERACTIVE_PROMPT_RE =
@@ -160,8 +176,9 @@ function run(cmd: string, cwd: string, timeoutMs = SCAFFOLD_TIMEOUT_MS): Promise
  * crash with "uv_tty_init returned EBADF" when spawned with a non-TTY stdin —
  * which then aborts before the project folder is created. A PTY gives them the
  * terminal they expect. All prompt flags are still passed, so nothing should ask
- * for input; INTERACTIVE_PROMPT_RE remains as a safety net. Falls back to plain
- * run() if node-pty can't be loaded.
+ * for input; if a CLI asks anyway, INTERACTIVE_PROMPT_RE spots it and the user
+ * can type the answer into the install log panel (scaffold:input writes straight
+ * into this PTY). Falls back to plain run() if node-pty can't be loaded.
  */
 async function runPty(cmd: string, cwd: string, timeoutMs = SCAFFOLD_TIMEOUT_MS): Promise<number> {
   if (scaffoldWasCancelled()) return 130
@@ -177,7 +194,13 @@ async function runPty(cmd: string, cwd: string, timeoutMs = SCAFFOLD_TIMEOUT_MS)
   return new Promise<number>((resolve) => {
     const isWin = process.platform === 'win32'
     const file = isWin ? process.env.ComSpec || 'cmd.exe' : '/bin/sh'
-    const args = isWin ? ['/d', '/s', '/c', cmd] : ['-c', cmd]
+    // On Windows node-pty rebuilds an argv array into a command line and escapes
+    // embedded quotes as \" — which cmd.exe does not understand, so a quoted
+    // argument like "my-app" reaches the CLI with literal quotes ("Could not
+    // create a project called ""my-app""..."). Passing the command line as a
+    // single string makes node-pty use it verbatim; cmd /s then strips only the
+    // outer quotes and inner quotes survive intact.
+    const args: string | string[] = isWin ? `/d /s /c "${cmd}"` : ['-c', cmd]
 
     let proc: IPty
     try {
@@ -196,15 +219,38 @@ async function runPty(cmd: string, cwd: string, timeoutMs = SCAFFOLD_TIMEOUT_MS)
 
     activeScaffoldPty = proc
     let settled = false
-    let sawInteractivePrompt = false
+    let answerTimer: NodeJS.Timeout | null = null
     let lineBuf = ''
 
     const finish = (code: number) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
+      if (answerTimer) clearTimeout(answerTimer)
+      if (promptDeadline === armPromptDeadline) promptDeadline = null
       if (activeScaffoldPty === proc) activeScaffoldPty = null
       resolve(code)
+    }
+
+    // A CLI that stops on a question is no longer fatal: the log panel has an
+    // input box wired to this PTY, so the user can answer it. Only give up if
+    // nothing is typed for a while — otherwise a truly stuck prompt would sit
+    // there until the 20-minute command timeout.
+    const armPromptDeadline = () => {
+      if (settled) return
+      if (answerTimer) clearTimeout(answerTimer)
+      answerTimer = setTimeout(() => {
+        log(
+          `No answer after ${Math.round(PROMPT_ANSWER_TIMEOUT_MS / 60000)} minutes — cancelling the installer.`,
+          'err',
+        )
+        try {
+          proc.kill()
+        } catch {
+          /* ignore */
+        }
+        finish(130)
+      }, PROMPT_ANSWER_TIMEOUT_MS)
     }
 
     const handleLine = (raw: string) => {
@@ -216,17 +262,9 @@ async function runPty(cmd: string, cwd: string, timeoutMs = SCAFFOLD_TIMEOUT_MS)
       if (!trimmed) return
       log(trimmed, 'out')
       if (INTERACTIVE_PROMPT_RE.test(trimmed)) {
-        sawInteractivePrompt = true
-        log(
-          'Interactive CLI prompt detected — aborting because DevFlow cannot answer terminal prompts.',
-          'err',
-        )
-        try {
-          proc.kill()
-        } catch {
-          /* ignore */
-        }
-        finish(130)
+        log('The installer is asking a question — type your answer below and press Enter.', 'sys')
+        promptDeadline = armPromptDeadline
+        armPromptDeadline()
       }
     }
 
@@ -238,7 +276,7 @@ async function runPty(cmd: string, cwd: string, timeoutMs = SCAFFOLD_TIMEOUT_MS)
     })
     proc.onExit(({ exitCode }) => {
       if (lineBuf) handleLine(lineBuf)
-      if (scaffoldWasCancelled() || sawInteractivePrompt) finish(130)
+      if (scaffoldWasCancelled()) finish(130)
       else finish(exitCode ?? 1)
     })
 
@@ -557,7 +595,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
       {
         const fail = runFailure(
           code,
-          'create-payload-app opened an interactive prompt. Update DevFlow or run the command manually.',
+          'create-payload-app stopped on a question that was left unanswered.',
           `create-payload-app exited with code ${code}`,
         )
         if (fail) return fail
@@ -573,7 +611,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
       {
         const fail = runFailure(
           code,
-          'create-strapi-app opened an interactive prompt. Update DevFlow or run the command manually.',
+          'create-strapi-app stopped on a question that was left unanswered.',
           `create-strapi-app exited with code ${code}`,
         )
         if (fail) return fail
@@ -594,7 +632,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
       {
         const fail = runFailure(
           code,
-          'create-next-app opened an interactive prompt. Update DevFlow or run the command manually.',
+          'create-next-app stopped on a question that was left unanswered.',
           `create-next-app exited with code ${code}`,
         )
         if (fail) return fail
@@ -610,7 +648,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
       {
         const fail = runFailure(
           code,
-          'create-electron opened an interactive prompt (framework/updater/mirror). Update DevFlow or run: npm create @quick-start/electron@latest <name> -- --template react-ts --skip',
+          'create-electron stopped on a question (framework/updater/mirror) that was left unanswered.',
           `create-electron exited with code ${code}`,
         )
         if (fail) return fail
@@ -641,7 +679,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
       {
         const fail = runFailure(
           code,
-          'create-vite opened an interactive prompt. Update DevFlow or run the command manually.',
+          'create-vite stopped on a question that was left unanswered.',
           `create-vite exited with code ${code}`,
         )
         if (fail) return fail
@@ -702,6 +740,13 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
 
 export function registerScaffoldHandlers() {
   ipcMain.handle('scaffold:create', (_e, opts: ScaffoldOptions) => scaffold(opts))
+  ipcMain.handle('scaffold:input', (_e, data: string) => {
+    if (!scaffoldInProgress || typeof data !== 'string') return { ok: false }
+    // Echo it so the panel reads like a real terminal session.
+    const shown = data.replace(/[\r\n]+$/, '')
+    if (shown) log(`> ${shown}`, 'sys')
+    return { ok: writeScaffoldInput(data) }
+  })
   ipcMain.handle('scaffold:cancel', () => {
     if (!scaffoldInProgress) return { ok: false }
     log('Installation cancelled by user.', 'sys')

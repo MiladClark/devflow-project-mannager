@@ -82,6 +82,8 @@ export interface Api {
   clearLogs(id: string): Promise<boolean>
   createProject(opts: ScaffoldOptions): Promise<ScaffoldResult>
   cancelProjectCreation(): Promise<{ ok: boolean }>
+  /** Write a line into the running scaffolder's terminal (answers CLI prompts). */
+  sendProjectCreationInput(data: string): Promise<{ ok: boolean }>
   checkPort(port: number, excludeProjectId?: string): Promise<PortCheck>
   getPortOwner(port: number): Promise<PortOwner | null>
   getPortStatus(): Promise<PortStatusOverview>
@@ -353,6 +355,7 @@ function createMockApi(): Api {
     clearLogs: async () => true,
     createProject: async () => ({ ok: false, error: 'Not available in browser preview' }),
     cancelProjectCreation: async () => ({ ok: false }),
+    sendProjectCreationInput: async () => ({ ok: false }),
     checkPort: async (port) => ({ port, free: port !== 3000, reserved: port === 3000 || port === 3001 }),
     getPortOwner: async (port) =>
       port === 3000

@@ -7,7 +7,7 @@ export interface Hint {
 
 export const hints: Record<string, Hint> = {
   next: {
-    title: 'Next.js 15',
+    title: 'Next.js',
     useCases: [
       'Production websites that need SEO (server-side rendering / static generation)',
       'Full-stack apps: API routes, server actions and frontend in one project',

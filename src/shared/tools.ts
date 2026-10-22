@@ -1,3 +1,5 @@
+import type { ToolInstallOptions } from './types'
+
 export type ToolCategory = 'runtime' | 'vcs' | 'database' | 'container' | 'editor' | 'terminal' | 'utility'
 
 export interface ToolDef {
@@ -255,4 +257,27 @@ export function uninstallCommandFor(t: ToolDef): string | undefined {
   }
   if (t.winget) return `winget uninstall --id ${t.winget} -e`
   return undefined
+}
+
+/** Validate renderer-provided install controls before they reach a process command. */
+export function normalizeToolInstallOptions(value: unknown): ToolInstallOptions | null {
+  if (value === undefined || value === null) return {}
+  if (typeof value !== 'object' || Array.isArray(value)) return null
+  const input = value as Record<string, unknown>
+  const options: ToolInstallOptions = {}
+  if (input.version !== undefined && input.version !== '') {
+    if (typeof input.version !== 'string') return null
+    const version = input.version.trim()
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(version)) return null
+    options.version = version
+  }
+  if (input.scope !== undefined) {
+    if (input.scope !== 'auto' && input.scope !== 'user' && input.scope !== 'machine') return null
+    options.scope = input.scope
+  }
+  if (input.force !== undefined) {
+    if (typeof input.force !== 'boolean') return null
+    options.force = input.force
+  }
+  return options
 }

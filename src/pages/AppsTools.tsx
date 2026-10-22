@@ -12,10 +12,11 @@ import {
   AlertTriangle,
   X,
   Trash2,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { api, isElectron } from '../lib/ipc'
 import { TOOLS, TOOL_CATEGORIES, installCommandFor, uninstallCommandFor, type ToolDef } from '../shared/tools'
-import type { ToolStatus, InstallState } from '../shared/types'
+import type { ToolStatus, InstallState, ToolInstallOptions } from '../shared/types'
 import { LogViewer } from '../components/LogViewer'
 import { Skeleton, SkeletonToolCards } from '../components/Skeleton'
 import { notify } from '../state/notifications'
@@ -69,18 +70,33 @@ function ToolCard({
   tool: ToolDef
   status?: ToolStatus
   install?: InstallState
-  onInstall: (id: string) => void
+  onInstall: (id: string, options?: ToolInstallOptions) => void
   onUninstall: (id: string) => void
   onCancel: (id: string) => void
 }) {
   const [copied, setCopied] = useState(false)
+  const [showOptions, setShowOptions] = useState(false)
+  const [version, setVersion] = useState('')
+  const [scope, setScope] = useState<ToolInstallOptions['scope']>('auto')
+  const [force, setForce] = useState(false)
   const cmd = installCommandFor(tool)
   const uninstallCmd = uninstallCommandFor(tool)
   const inProgress = install?.phase === 'installing'
   const installing = inProgress && install?.mode !== 'uninstall'
   const uninstalling = inProgress && install?.mode === 'uninstall'
   const canInstall = isElectron && !!cmd && status !== undefined && !status.installed && !inProgress
+  const canUpdateOrRepair = isElectron && !!cmd && status?.installed && !inProgress
   const canUninstall = isElectron && !!uninstallCmd && status?.installed && !inProgress
+  const versionValid = !version || /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(version.trim())
+
+  function startInstall() {
+    if (!versionValid) return
+    onInstall(tool.id, {
+      version: version.trim() || undefined,
+      scope: tool.winget ? scope : undefined,
+      force: force || !!status?.installed,
+    })
+  }
 
   return (
     <div className="lift flex flex-col gap-3 rounded-xl border border-edge bg-panel p-4 hover:border-slate-600">
@@ -100,10 +116,20 @@ function ToolCard({
       <div className="mt-auto flex flex-wrap items-center gap-2">
         {canInstall && (
           <button
-            onClick={() => onInstall(tool.id)}
+            onClick={startInstall}
+            disabled={!versionValid}
             className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg hover:bg-cyan-300"
           >
             <Download size={13} /> Download &amp; install
+          </button>
+        )}
+        {canUpdateOrRepair && (
+          <button
+            onClick={startInstall}
+            disabled={!versionValid}
+            className="flex items-center gap-1.5 rounded-lg border border-accent/45 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/20 disabled:opacity-40"
+          >
+            <RefreshCw size={13} /> Update / repair
           </button>
         )}
         {canUninstall && (
@@ -174,7 +200,58 @@ function ToolCard({
             <code className="truncate font-mono">{copied ? 'Copied!' : cmd}</code>
           </button>
         )}
+        {cmd && !inProgress && (
+          <button
+            type="button"
+            onClick={() => setShowOptions((value) => !value)}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs ${
+              showOptions ? 'border-accent/50 text-accent' : 'border-edge text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <SlidersHorizontal size={13} /> Install options
+          </button>
+        )}
       </div>
+
+      {showOptions && cmd && !inProgress && (
+        <div className="grid gap-3 rounded-lg border border-edge bg-bg/60 p-3 sm:grid-cols-2">
+          <label className="text-xs text-slate-500">
+            Version or release tag
+            <input
+              value={version}
+              onChange={(e) => setVersion(e.target.value)}
+              placeholder="Latest provider version"
+              aria-invalid={!versionValid}
+              className={`mt-1 w-full rounded-md border bg-panel px-2.5 py-1.5 text-xs text-slate-200 outline-none ${
+                versionValid ? 'border-edge focus:border-accent/60' : 'border-rose-500/60'
+              }`}
+            />
+          </label>
+          {tool.winget && (
+            <label className="text-xs text-slate-500">
+              Install scope
+              <select
+                value={scope}
+                onChange={(e) => setScope(e.target.value as ToolInstallOptions['scope'])}
+                className="mt-1 w-full rounded-md border border-edge bg-panel px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-accent/60"
+              >
+                <option value="auto">Provider default</option>
+                <option value="user">Current user</option>
+                <option value="machine">All users / machine</option>
+              </select>
+            </label>
+          )}
+          <label className="flex items-center gap-2 text-xs text-slate-400 sm:col-span-2">
+            <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
+            Force reinstall / repair even if already installed
+          </label>
+          {!versionValid && (
+            <p className="text-xs text-rose-400 sm:col-span-2">
+              Version may only contain letters, numbers, dots, dashes, and underscores.
+            </p>
+          )}
+        </div>
+      )}
 
       {install?.phase === 'error' && install.error && (
         <p className="flex items-start gap-1.5 text-xs text-rose-400">
@@ -244,14 +321,14 @@ export function AppsTools() {
     }
   }, [])
 
-  async function onInstall(toolId: string) {
+  async function onInstall(toolId: string, options?: ToolInstallOptions) {
     const tool = TOOLS.find((t) => t.id === toolId)
     notify('info', `Downloading ${tool?.name ?? toolId}`, 'This can take a minute. You can keep using DevFlow.')
     // optimistic local state so the card reflects "installing" instantly
     setInstalls((m) =>
       new Map(m).set(toolId, { toolId, phase: 'installing', lines: [], startedAt: Date.now() }),
     )
-    await api.installTool(toolId)
+    await api.installTool(toolId, options)
     // the final phase arrives via the onToolInstallState event
   }
 

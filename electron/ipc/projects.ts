@@ -10,6 +10,7 @@ import { applyLoginItemSettings } from '../lib/autostart'
 import { openInEditor, detectEditors } from '../lib/editor'
 import { scanForProjects } from '../lib/scanProjects'
 import { validateLocalSlug } from '../lib/proxy'
+import { isPackageManager } from '../lib/packageManagerAdapter'
 
 function broadcast(channel: string, ...args: unknown[]) {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, ...args)
@@ -137,6 +138,13 @@ export function registerProjectHandlers() {
   ipcMain.handle('activity:list', () => store.getActivity())
   ipcMain.handle('settings:get', () => store.getSettings())
   ipcMain.handle('settings:update', (_e, patch) => {
+    if (
+      !patch ||
+      typeof patch !== 'object' ||
+      (patch.preferredPackageManager !== undefined && !isPackageManager(patch.preferredPackageManager))
+    ) {
+      return store.getSettings()
+    }
     const updated = store.updateSettings(patch)
     applyLoginItemSettings()
     return updated

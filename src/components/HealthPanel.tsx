@@ -6,6 +6,17 @@ import { UpgradePrompt } from './UpgradePrompt'
 import { Skeleton, SkeletonText } from './Skeleton'
 import type { HealthReport, HealthPhase } from '../shared/types'
 
+function updateCommand(pm: HealthReport['packageManager']): string {
+  if (pm === 'yarn') return 'yarn upgrade'
+  return `${pm} update`
+}
+
+function auditFixCommand(pm: HealthReport['packageManager']): string | null {
+  if (pm === 'npm') return 'npm audit fix'
+  if (pm === 'pnpm') return 'pnpm audit --fix'
+  return null
+}
+
 const PHASE_LABEL: Record<HealthPhase, string> = {
   queued: 'Queued...',
   outdated: 'Checking outdated packages...',
@@ -111,9 +122,11 @@ export function HealthPanel({ projectId }: { projectId: string }) {
               <h4 className="text-xs font-semibold tracking-wider text-slate-500 uppercase">
                 Outdated packages ({report.outdated.length})
               </h4>
-              {report.outdated.length > 0 && <CopyHint cmd="npm update" />}
+              {report.outdated.length > 0 && <CopyHint cmd={updateCommand(report.packageManager)} />}
             </div>
-            {report.outdated.length === 0 ? (
+            {report.outdatedError ? (
+              <p className="text-sm text-amber-300">{report.outdatedError}</p>
+            ) : report.outdated.length === 0 ? (
               <p className="flex items-center gap-2 text-sm text-emerald-400">
                 <CheckCircle2 size={14} /> All dependencies match their wanted ranges.
               </p>
@@ -154,10 +167,12 @@ export function HealthPanel({ projectId }: { projectId: string }) {
                   </span>
                 )}
               </h4>
-              {report.audit && report.audit.total > 0 && <CopyHint cmd="npm audit fix" />}
+              {report.audit && report.audit.total > 0 && auditFixCommand(report.packageManager) && (
+                <CopyHint cmd={auditFixCommand(report.packageManager)!} />
+              )}
             </div>
             {!entitlements.healthAudit ? (
-              <UpgradePrompt message="Vulnerability scanning (npm audit) is part of the Pro plan." />
+              <UpgradePrompt message="Dependency vulnerability scanning is part of the Pro plan." />
             ) : report.auditError && report.auditError !== 'pro_required' ? (
               <p className="text-sm text-amber-300">{report.auditError}</p>
             ) : report.audit ? (

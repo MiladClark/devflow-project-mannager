@@ -29,6 +29,7 @@ const defaults = (): StoreData => ({
   settings: {
     reservedPorts: [3000, 3001],
     defaultProjectsDir: path.join(app.getPath('home'), 'dev'),
+    preferredPackageManager: 'npm',
     closeToTray: false,
     notifyCrash: true,
     notifyBuild: true,

@@ -147,6 +147,8 @@ export interface PortStatusOverview {
 export interface AppSettings {
   reservedPorts: number[]
   defaultProjectsDir: string
+  /** Default for newly scaffolded projects; each project can override it. */
+  preferredPackageManager: PackageManager
   closeToTray: boolean
   notifyCrash: boolean
   notifyBuild: boolean
@@ -321,7 +323,9 @@ export interface AuditCounts {
 export interface HealthReport {
   projectId: string
   scannedAt: number
+  packageManager: PackageManager
   outdated: OutdatedDep[]
+  outdatedError?: string
   audit: AuditCounts | null
   auditError?: string
   engines: { required?: string; installed: string; satisfied: boolean | null }
@@ -365,6 +369,9 @@ export type ScaffoldPluginId =
 export interface ScaffoldOptions {
   framework: 'next' | 'vite-react' | 'vite-vue' | 'vite-vanilla' | 'electron'
   cms: CmsChoice
+  packageManager: PackageManager
+  /** Version or dist-tag of the create-* package (for example latest, 15, 6.2.0, canary). */
+  scaffoldVersion?: string
   typescript: boolean
   tailwind: boolean
   plugins?: ScaffoldPluginId[]
@@ -422,6 +429,15 @@ export interface ToolStatus {
   version?: string
 }
 
+export interface ToolInstallOptions {
+  /** Exact version or provider release tag. Empty means provider default/latest. */
+  version?: string
+  /** Supported by winget-backed tools; auto leaves the provider default. */
+  scope?: 'auto' | 'user' | 'machine'
+  /** Re-run the installer even when the tool is already detected. */
+  force?: boolean
+}
+
 export type InstallPhase = 'installing' | 'done' | 'error'
 
 export interface InstallState {
@@ -429,6 +445,7 @@ export interface InstallState {
   phase: InstallPhase
   /** install (default) or uninstall — same state machine, different UI label */
   mode?: 'install' | 'uninstall'
+  options?: ToolInstallOptions
   lines: LogLine[]
   error?: string
   startedAt: number

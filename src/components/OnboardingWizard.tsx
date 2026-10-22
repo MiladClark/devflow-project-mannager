@@ -5,7 +5,7 @@ import { api, isElectron } from '../lib/ipc'
 import { FONTS, applyFont, getFontId } from '../lib/font'
 import { THEMES, applyTheme, getThemeChoice, type ThemeMode } from '../lib/theme'
 import { useApp } from '../state/store'
-import type { AppSettings, PreferredEditor, PreferredNodeManager } from '../shared/types'
+import type { AppSettings, PackageManager, PreferredEditor, PreferredNodeManager } from '../shared/types'
 import { FramelessChrome } from './FramelessChrome'
 import { SwitchField } from './Switch'
 
@@ -30,6 +30,7 @@ type DraftSettings = Pick<
   | 'preferredEditor'
   | 'customEditorCmd'
   | 'preferredNodeManager'
+  | 'preferredPackageManager'
 >
 
 type OnboardingWizardProps = {
@@ -56,6 +57,7 @@ export function OnboardingWizard({ settings, onDone }: OnboardingWizardProps) {
     preferredEditor: settings.preferredEditor,
     customEditorCmd: settings.customEditorCmd ?? '',
     preferredNodeManager: settings.preferredNodeManager,
+    preferredPackageManager: settings.preferredPackageManager,
   }))
 
   useEffect(() => {
@@ -100,6 +102,7 @@ export function OnboardingWizard({ settings, onDone }: OnboardingWizardProps) {
             preferredEditor: draft.preferredEditor,
             customEditorCmd: draft.customEditorCmd,
             preferredNodeManager: draft.preferredNodeManager,
+            preferredPackageManager: draft.preferredPackageManager,
           }
       // Appearance already applied live; keep current theme/font on skip too
       const updated = await api.updateSettings(patch)
@@ -420,6 +423,28 @@ export function OnboardingWizard({ settings, onDone }: OnboardingWizardProps) {
                         className="mt-2 w-full max-w-md rounded-lg border border-edge bg-bg px-3 py-2 text-sm text-slate-200 outline-none focus:border-accent/60"
                       />
                     )}
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                      Default package manager
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {(['npm', 'pnpm', 'yarn', 'bun'] as PackageManager[]).map((manager) => (
+                        <button
+                          key={manager}
+                          type="button"
+                          onClick={() => patchDraft({ preferredPackageManager: manager })}
+                          className={`rounded-lg border px-4 py-2 text-sm ${
+                            draft.preferredPackageManager === manager
+                              ? 'border-accent bg-accent/10 text-accent'
+                              : 'border-edge text-slate-400'
+                          }`}
+                        >
+                          {manager === 'yarn' ? 'Yarn' : manager}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div>

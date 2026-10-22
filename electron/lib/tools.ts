@@ -2,8 +2,14 @@ import { execFile, spawn, execSync, type ChildProcess, type SpawnOptions } from 
 import { existsSync, readdirSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { TOOLS, installCommandFor, uninstallCommandFor, type ToolDef } from '../../src/shared/tools'
-import type { ToolStatus, LogLine, InstallState } from '../../src/shared/types'
+import {
+  TOOLS,
+  installCommandFor,
+  normalizeToolInstallOptions,
+  uninstallCommandFor,
+  type ToolDef,
+} from '../../src/shared/tools'
+import type { ToolStatus, LogLine, InstallState, ToolInstallOptions } from '../../src/shared/types'
 import { broadcast } from './broadcast'
 
 interface ExecResult {
@@ -99,7 +105,7 @@ interface InstallLaunch {
   spawn: () => ChildProcess
 }
 
-function buildInstallLaunch(tool: ToolDef, cmd: string): InstallLaunch {
+function buildInstallLaunch(tool: ToolDef, cmd: string, options: ToolInstallOptions = {}): InstallLaunch {
   const env = installEnv()
 
   if (tool.winget) {
@@ -113,6 +119,9 @@ function buildInstallLaunch(tool: ToolDef, cmd: string): InstallLaunch {
       '--disable-interactivity',
       '--verbose-logs',
     ]
+    if (options.version) args.push('--version', options.version)
+    if (options.scope && options.scope !== 'auto') args.push('--scope', options.scope)
+    if (options.force) args.push('--force')
     return {
       label: `winget ${args.join(' ')}`,
       hint: 'If nothing happens, check for a Windows Administrator (UAC) prompt behind this window.',
@@ -121,7 +130,19 @@ function buildInstallLaunch(tool: ToolDef, cmd: string): InstallLaunch {
   }
 
   if (tool.installCmd?.startsWith('npm ')) {
-    const args = [...tool.installCmd.split(/\s+/).slice(1), '--loglevel', 'info']
+    const args = [...tool.installCmd.split(/\s+/).slice(1)]
+    if (options.version) {
+      let packageIndex = -1
+      for (let i = args.length - 1; i >= 0; i -= 1) {
+        if (!args[i].startsWith('-') && args[i] !== 'install') {
+          packageIndex = i
+          break
+        }
+      }
+      if (packageIndex >= 0) args[packageIndex] = `${args[packageIndex]}@${options.version}`
+    }
+    if (options.force) args.push('--force')
+    args.push('--loglevel', 'info')
     return {
       label: `npm ${args.join(' ')}`,
       spawn: () => spawn('npm', args, { ...SPAWN_OPTS, env, shell: true }),
@@ -259,6 +280,11 @@ function clearIdleTimer(toolId: string) {
   }
 }
 
+/** Force the next detection pass to re-read PATH after an installer changed it. */
+function invalidateInstallPath() {
+  cachedInstallPath = undefined
+}
+
 function startIdleWatchdog(toolId: string, state: InstallState, getLastActivity: () => number) {
   clearIdleTimer(toolId)
   const timer = setInterval(() => {
@@ -375,6 +401,7 @@ async function runToolCommand(
   getCmd: (tool: ToolDef) => string | undefined,
   buildLaunch: (tool: ToolDef, cmd: string) => InstallLaunch,
   verify: (tool: ToolDef, state: InstallState) => Promise<{ ok: boolean; error?: string }>,
+  options?: ToolInstallOptions,
 ): Promise<{ ok: boolean; error?: string }> {
   const tool = TOOLS.find((t) => t.id === toolId)
   if (!tool) return { ok: false, error: 'Unknown tool' }
@@ -396,7 +423,7 @@ async function runToolCommand(
   }
 
   const launch = buildLaunch(tool, cmd)
-  const state: InstallState = { toolId, phase: 'installing', mode, lines: [], startedAt: Date.now() }
+  const state: InstallState = { toolId, phase: 'installing', mode, options, lines: [], startedAt: Date.now() }
   installs.set(toolId, state)
   broadcast('tools:installState', { ...state })
   pushInstallLine(state, 'sys', `$ ${launch.label}`)
@@ -463,6 +490,7 @@ async function runToolCommand(
       }
       if (code === 0) {
         pushInstallLine(state, 'sys', `${mode === 'uninstall' ? 'Uninstall' : 'Install'} finished. Verifying...`)
+        invalidateInstallPath()
         const result = await verify(tool, state)
         if (result.ok) {
           finishInstall(state, 'done')
@@ -481,12 +509,22 @@ async function runToolCommand(
   })
 }
 
-export async function installTool(toolId: string): Promise<{ ok: boolean; error?: string }> {
+export async function installTool(
+  toolId: string,
+  rawOptions?: ToolInstallOptions,
+): Promise<{ ok: boolean; error?: string }> {
+  const options = normalizeToolInstallOptions(rawOptions)
+  if (!options) {
+    return {
+      ok: false,
+      error: 'Invalid install options. Version may only contain letters, numbers, dots, dashes, and underscores.',
+    }
+  }
   return runToolCommand(
     toolId,
     'install',
     installCommandFor,
-    buildInstallLaunch,
+    (tool, cmd) => buildInstallLaunch(tool, cmd, options),
     async (tool, state) => {
       const status = await detectTool(tool)
       state.status = status
@@ -499,6 +537,7 @@ export async function installTool(toolId: string): Promise<{ ok: boolean; error?
         error: 'Installer finished but the tool was not detected. Try Re-scan, or restart DevFlow so PATH refreshes.',
       }
     },
+    options,
   )
 }
 

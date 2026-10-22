@@ -1,7 +1,7 @@
 {
   "name": "devflow-manager",
   "productName": "DevFlow Manager",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "description": "Windows desktop app to create, run, monitor and configure local dev projects",
   "author": "DevTune",
   "private": true,
@@ -11,6 +11,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
     "clean:build": "node scripts/clean-build.mjs",
     "build-icon": "node scripts/build-icon.mjs",
     "package": "node scripts/clean-build.mjs && npm run build && node scripts/package-portable.mjs",

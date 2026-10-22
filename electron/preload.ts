@@ -107,7 +107,7 @@ const api = {
   applyConnection: (conn: unknown) => ipcRenderer.invoke('connections:apply', conn),
   // tools & local db services
   detectTools: () => ipcRenderer.invoke('tools:detect'),
-  installTool: (toolId: string) => ipcRenderer.invoke('tools:install', toolId),
+  installTool: (toolId: string, options?: unknown) => ipcRenderer.invoke('tools:install', toolId, options),
   uninstallTool: (toolId: string) => ipcRenderer.invoke('tools:uninstall', toolId),
   cancelInstallTool: (toolId: string) => ipcRenderer.invoke('tools:cancelInstall', toolId),
   getInstallStates: () => ipcRenderer.invoke('tools:installStates'),

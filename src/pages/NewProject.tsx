@@ -5,7 +5,7 @@ import { api } from '../lib/ipc'
 import { useApp } from '../state/store'
 import { useEntitlements } from '../lib/entitlements'
 import { notify } from '../state/notifications'
-import type { CmsChoice, LogLine, ScaffoldOptions, PortCheck, PortOwner, ScaffoldPluginId } from '../shared/types'
+import type { CmsChoice, LogLine, ScaffoldOptions, PortCheck, PortOwner, ScaffoldPluginId, PackageManager } from '../shared/types'
 import { SCAFFOLD_PLUGINS, availablePlugins, normalizePlugins } from '../shared/scaffoldPlugins'
 import { TechLogo, cmsLogoId, frameworkLogoId } from '../components/TechLogo'
 import { LogViewer } from '../components/LogViewer'
@@ -33,6 +33,13 @@ const cmsOptions: { id: CmsChoice; name: string; desc: string; hintKey: string }
 
 const steps = ['Framework', 'Configuration', 'Summary & Install']
 
+const packageManagers: { id: PackageManager; name: string; desc: string }[] = [
+  { id: 'npm', name: 'npm', desc: 'Bundled with Node.js' },
+  { id: 'pnpm', name: 'pnpm', desc: 'Fast and disk-efficient' },
+  { id: 'yarn', name: 'Yarn', desc: 'Workspace-friendly' },
+  { id: 'bun', name: 'Bun', desc: 'Fast runtime and manager' },
+]
+
 export function NewProject() {
   const navigate = useNavigate()
   const { settings, refreshProjects, projects } = useApp()
@@ -44,6 +51,8 @@ export function NewProject() {
   const [cms, setCms] = useState<CmsChoice>('none')
   const [typescript, setTypescript] = useState(true)
   const [tailwind, setTailwind] = useState(true)
+  const [packageManager, setPackageManager] = useState<PackageManager>(settings?.preferredPackageManager ?? 'npm')
+  const [scaffoldVersion, setScaffoldVersion] = useState('latest')
   const [plugins, setPlugins] = useState<ScaffoldPluginId[]>(['prettier', 'lucide'])
 
   const pluginChoices = availablePlugins({ framework, cms })
@@ -67,6 +76,9 @@ export function NewProject() {
   function pickCms(c: CmsChoice) {
     setCms(c)
     if (c === 'payload') setFramework('next')
+    // Payload currently documents npm, pnpm, and Yarn support. Keep the
+    // beginner path on a supported manager instead of failing late.
+    if (c === 'payload' && packageManager === 'bun') setPackageManager('pnpm')
   }
   const [name, setName] = useState('my-app')
   const [parentDir, setParentDir] = useState('')
@@ -113,7 +125,8 @@ export function NewProject() {
   useEffect(() => api.onScaffoldLog((line) => setInstallLog((l) => [...l, line])), [])
 
   const nameValid = /^[a-z0-9][a-z0-9._-]*$/.test(name)
-  const canNext = step === 0 || (step === 1 && nameValid && parentDir.trim().length > 0)
+  const scaffoldVersionValid = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(scaffoldVersion.trim())
+  const canNext = (step === 0 && scaffoldVersionValid) || (step === 1 && nameValid && parentDir.trim().length > 0)
 
   async function install() {
     setInstalling(true)
@@ -123,6 +136,8 @@ export function NewProject() {
     const res = await api.createProject({
       framework,
       cms,
+      packageManager,
+      scaffoldVersion,
       typescript: effectiveTs,
       tailwind,
       plugins: activePlugins,
@@ -298,7 +313,56 @@ export function NewProject() {
 
           <div className="rounded-xl border border-edge bg-panel2/40 p-4">
             <p className="mb-3 text-xs font-semibold tracking-wider text-slate-500 uppercase">Project options</p>
-            <div className="flex flex-wrap gap-6">
+            <div className="mb-4">
+              <p className="mb-2 text-xs text-slate-500">Package manager</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {packageManagers.map((pm) => {
+                  const unsupported = cms === 'payload' && pm.id === 'bun'
+                  const selected = packageManager === pm.id
+                  return (
+                    <button
+                      key={pm.id}
+                      type="button"
+                      disabled={unsupported}
+                      title={unsupported ? 'Payload currently supports npm, pnpm, and Yarn' : pm.desc}
+                      onClick={() => setPackageManager(pm.id)}
+                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                        selected
+                          ? 'border-accent bg-accent/10 text-white'
+                          : 'border-edge bg-bg text-slate-400 hover:border-slate-600 hover:text-slate-200'
+                      } disabled:cursor-not-allowed disabled:opacity-35`}
+                    >
+                      <span className="block text-sm font-semibold">{pm.name}</span>
+                      <span className="block truncate text-[10px] text-slate-500">{pm.desc}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-2 text-xs text-slate-600">
+                DevFlow uses this manager for the project scaffold, dependencies, add-ons, scripts, and health checks.
+              </p>
+            </div>
+            <div className="mb-4 border-t border-edge pt-4">
+              <label className="mb-1 block text-xs text-slate-500" htmlFor="scaffold-version">
+                Stack / generator version
+              </label>
+              <input
+                id="scaffold-version"
+                value={scaffoldVersion}
+                onChange={(e) => setScaffoldVersion(e.target.value)}
+                placeholder="latest, 15, 6.2.0, canary"
+                aria-invalid={!scaffoldVersionValid}
+                className={`w-full max-w-xs rounded-lg border bg-bg px-3 py-2 text-sm text-slate-200 outline-none ${
+                  scaffoldVersionValid ? 'border-edge focus:border-accent/60' : 'border-rose-500/60'
+                }`}
+              />
+              <p className={`mt-1 text-xs ${scaffoldVersionValid ? 'text-slate-600' : 'text-rose-400'}`}>
+                {scaffoldVersionValid
+                  ? 'Use latest, a major version, an exact version, or a release tag. DevFlow pins the selected create tool.'
+                  : 'Use letters, numbers, dots, dashes, or underscores only.'}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-6 border-t border-edge pt-4">
             <div className={`flex items-center gap-2.5 text-sm text-slate-300 ${cms === 'payload' ? 'opacity-60' : ''}`}>
               <Switch
                 size="sm"
@@ -405,6 +469,8 @@ export function NewProject() {
                 <tr><td className="w-40 text-slate-500">Framework</td><td className="text-white">{cms === 'strapi' ? 'Strapi (standalone)' : frameworks.find((f) => f.id === framework)?.name}</td></tr>
                 <tr><td className="text-slate-500">Headless CMS</td><td className="text-white">{cmsOptions.find((c) => c.id === cms)?.name}</td></tr>
                 <tr><td className="text-slate-500">Language</td><td className="text-white">{effectiveTs ? 'TypeScript' : 'JavaScript'}</td></tr>
+                <tr><td className="text-slate-500">Package manager</td><td className="text-white">{packageManagers.find((pm) => pm.id === packageManager)?.name}</td></tr>
+                <tr><td className="text-slate-500">Stack version</td><td className="text-white">{scaffoldVersion}</td></tr>
                 <tr><td className="text-slate-500">Styling</td><td className="text-white">{cms !== 'strapi' && tailwind ? 'Tailwind CSS' : 'None'}</td></tr>
                 <tr>
                   <td className="text-slate-500">Add-ons</td>

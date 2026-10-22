@@ -8,7 +8,7 @@ import { broadcast, activity } from '../lib/broadcast'
 import { isGuestAccess, GUEST_ACTION_ERROR } from '../lib/licensing'
 import { isPortFree } from '../lib/ports'
 import { getPortOwner } from '../lib/portOwner'
-import { preflight, resolvePackageManager, pmInstall } from '../lib/pkgmanager'
+import { preflight, resolvePackageManager, pmInstall, pmRun } from '../lib/pkgmanager'
 import { resolveNodeEnv, wrapCommand } from '../lib/nodeVersion'
 import { registerProxy, unregisterProxy } from '../lib/proxy'
 import { composeUp } from '../lib/compose'
@@ -66,7 +66,7 @@ function pushLog(projectId: string, stream: LogLine['stream'], text: string) {
 }
 
 function buildRunCommand(p: Project): { cmd: string; extraEnv: Record<string, string> } {
-  let cmd = p.runCommand || 'npm run dev'
+  let cmd = p.runCommand || pmRun(resolvePackageManager(p.path), 'dev')
   const extraEnv: Record<string, string> = {}
   if (p.preferredPort) {
     if (p.framework === 'next') {

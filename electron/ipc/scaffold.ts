@@ -5,6 +5,20 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { ScaffoldOptions, ScaffoldResult } from '../../src/shared/types'
 import { normalizePlugins, type ScaffoldPluginId } from '../../src/shared/scaffoldPlugins'
+import {
+  addPackagesCommand,
+  electronScaffoldCommand,
+  installDependenciesCommand,
+  isPackageManager,
+  nextScaffoldCommand,
+  normalizeScaffoldVersion,
+  packageManagerExecutable,
+  packageManagerMeta,
+  payloadScaffoldCommand,
+  renderCommand,
+  strapiScaffoldCommand,
+  viteScaffoldCommand,
+} from '../lib/packageManagerAdapter'
 import { store } from '../lib/store'
 import { importProjectFromPath } from './projects'
 import { getEnforcedEntitlements, isGuestAccess, GUEST_ACTION_ERROR } from '../lib/licensing'
@@ -167,6 +181,42 @@ function run(cmd: string, cwd: string, timeoutMs = SCAFFOLD_TIMEOUT_MS): Promise
       killScaffoldChild(child)
       finish(124)
     }, timeoutMs)
+  })
+}
+
+function detectPackageManagerVersion(pm: ScaffoldOptions['packageManager']): Promise<string | null> {
+  return new Promise((resolve) => {
+    const child = spawn(packageManagerExecutable(pm), ['--version'], {
+      cwd: process.cwd(),
+      shell: true,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: scaffoldEnv(),
+    })
+    let output = ''
+    let settled = false
+    const finish = (version: string | null) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(version)
+    }
+    const timer = setTimeout(() => {
+      killScaffoldChild(child)
+      finish(null)
+    }, 10_000)
+    child.stdout?.on('data', (chunk: Buffer) => {
+      output += chunk.toString()
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      output += chunk.toString()
+    })
+    child.once('error', () => {
+      finish(null)
+    })
+    child.once('exit', (code) => {
+      finish(code === 0 ? output.trim().split(/\s+/)[0] || null : null)
+    })
   })
 }
 
@@ -414,8 +464,8 @@ function patchPackageScripts(projectDir: string, scripts: Record<string, string>
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), 'utf-8')
 }
 
-async function applyPrettier(projectDir: string): Promise<number> {
-  const code = await run('npm install -D prettier', projectDir)
+async function applyPrettier(projectDir: string, opts: ScaffoldOptions): Promise<number> {
+  const code = await run(renderCommand(addPackagesCommand(opts.packageManager, ['prettier'], { dev: true })), projectDir)
   if (code !== 0) return code
   fs.writeFileSync(
     path.join(projectDir, '.prettierrc'),
@@ -429,7 +479,13 @@ async function applyPrettier(projectDir: string): Promise<number> {
 async function applyEslint(projectDir: string, opts: ScaffoldOptions): Promise<number> {
   if (opts.framework === 'vite-vue') {
     const code = await run(
-      'npm install -D eslint @eslint/js typescript-eslint eslint-plugin-vue vue-eslint-parser globals',
+      renderCommand(
+        addPackagesCommand(
+          opts.packageManager,
+          ['eslint', '@eslint/js', 'typescript-eslint', 'eslint-plugin-vue', 'vue-eslint-parser', 'globals'],
+          { dev: true },
+        ),
+      ),
       projectDir,
     )
     if (code !== 0) return code
@@ -452,7 +508,13 @@ export default tseslint.config(
     )
   } else {
     const code = await run(
-      'npm install -D eslint @eslint/js typescript-eslint eslint-plugin-react-hooks eslint-plugin-react-refresh globals',
+      renderCommand(
+        addPackagesCommand(
+          opts.packageManager,
+          ['eslint', '@eslint/js', 'typescript-eslint', 'eslint-plugin-react-hooks', 'eslint-plugin-react-refresh', 'globals'],
+          { dev: true },
+        ),
+      ),
       projectDir,
     )
     if (code !== 0) return code
@@ -488,14 +550,26 @@ export default tseslint.config(
 
 async function applyVitest(projectDir: string, opts: ScaffoldOptions): Promise<number> {
   if (opts.framework === 'vite-vue') {
-    const code = await run('npm install -D vitest @vue/test-utils jsdom', projectDir)
+    const code = await run(
+      renderCommand(addPackagesCommand(opts.packageManager, ['vitest', '@vue/test-utils', 'jsdom'], { dev: true })),
+      projectDir,
+    )
     if (code !== 0) return code
   } else if (opts.framework === 'vite-vanilla') {
-    const code = await run('npm install -D vitest jsdom', projectDir)
+    const code = await run(
+      renderCommand(addPackagesCommand(opts.packageManager, ['vitest', 'jsdom'], { dev: true })),
+      projectDir,
+    )
     if (code !== 0) return code
   } else if (opts.framework === 'vite-react' || opts.framework === 'next' || opts.framework === 'electron') {
     const code = await run(
-      'npm install -D vitest jsdom @testing-library/react @testing-library/jest-dom',
+      renderCommand(
+        addPackagesCommand(
+          opts.packageManager,
+          ['vitest', 'jsdom', '@testing-library/react', '@testing-library/jest-dom'],
+          { dev: true },
+        ),
+      ),
       projectDir,
     )
     if (code !== 0) return code
@@ -523,22 +597,24 @@ export default defineConfig({
 async function applyPlugin(projectDir: string, id: ScaffoldPluginId, opts: ScaffoldOptions): Promise<number> {
   switch (id) {
     case 'prettier':
-      return applyPrettier(projectDir)
+      return applyPrettier(projectDir, opts)
     case 'eslint':
       return applyEslint(projectDir, opts)
     case 'vitest':
       return applyVitest(projectDir, opts)
     case 'react-router':
-      return run('npm install react-router-dom', projectDir)
+      return run(renderCommand(addPackagesCommand(opts.packageManager, ['react-router-dom'])), projectDir)
     case 'pinia':
-      return run('npm install pinia', projectDir)
+      return run(renderCommand(addPackagesCommand(opts.packageManager, ['pinia'])), projectDir)
     case 'lucide':
-      if (opts.framework === 'vite-vue') return run('npm install lucide-vue-next', projectDir)
-      return run('npm install lucide-react', projectDir)
+      if (opts.framework === 'vite-vue') {
+        return run(renderCommand(addPackagesCommand(opts.packageManager, ['lucide-vue-next'])), projectDir)
+      }
+      return run(renderCommand(addPackagesCommand(opts.packageManager, ['lucide-react'])), projectDir)
     case 'zustand':
-      return run('npm install zustand', projectDir)
+      return run(renderCommand(addPackagesCommand(opts.packageManager, ['zustand'])), projectDir)
     case 'tanstack-query':
-      return run('npm install @tanstack/react-query', projectDir)
+      return run(renderCommand(addPackagesCommand(opts.packageManager, ['@tanstack/react-query'])), projectDir)
     default:
       return 0
   }
@@ -556,6 +632,24 @@ async function applyPlugins(projectDir: string, opts: ScaffoldOptions): Promise<
 }
 
 async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
+  const validFrameworks = new Set(['next', 'vite-react', 'vite-vue', 'vite-vanilla', 'electron'])
+  const validCms = new Set(['none', 'payload', 'strapi', 'decap'])
+  if (!opts || typeof opts !== 'object') return { ok: false, error: 'Invalid project setup request.' }
+  if (!validFrameworks.has(opts.framework) || !validCms.has(opts.cms)) {
+    return { ok: false, error: 'Unsupported framework or CMS selection.' }
+  }
+  if (typeof opts.name !== 'string' || !/^[a-z0-9][a-z0-9._-]*$/.test(opts.name)) {
+    return { ok: false, error: 'Invalid project name. Use lowercase letters, numbers, dots, dashes, or underscores.' }
+  }
+  if (typeof opts.parentDir !== 'string' || !path.isAbsolute(opts.parentDir)) {
+    return { ok: false, error: 'Choose a valid absolute parent folder.' }
+  }
+  if (opts.preferredPort !== undefined && (!Number.isInteger(opts.preferredPort) || opts.preferredPort < 1 || opts.preferredPort > 65535)) {
+    return { ok: false, error: 'Preferred port must be between 1 and 65535.' }
+  }
+  if (opts.plugins !== undefined && !Array.isArray(opts.plugins)) {
+    return { ok: false, error: 'Invalid add-on selection.' }
+  }
   if (isGuestAccess()) return { ok: false, error: GUEST_ACTION_ERROR }
   const limits = getEnforcedEntitlements()
   if (store.getProjects().length >= limits.maxProjects) {
@@ -570,6 +664,35 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
       error: 'CMS project templates (Payload, Strapi, Decap) require a Pro license or an active trial.',
     }
   }
+
+  // Older renderer previews did not send this field; keep IPC backward
+  // compatible while making npm an explicit fallback instead of a hidden
+  // implementation detail throughout the scaffold pipeline.
+  const requestedPackageManager: unknown = opts.packageManager ?? 'npm'
+  if (!isPackageManager(requestedPackageManager)) {
+    return { ok: false, error: 'Unsupported package manager.' }
+  }
+  opts = { ...opts, packageManager: requestedPackageManager }
+  const scaffoldVersion = normalizeScaffoldVersion(opts.scaffoldVersion)
+  if (!scaffoldVersion) {
+    return {
+      ok: false,
+      error: 'Invalid stack version. Use a version or release tag such as latest, 15, 6.2.0, or canary.',
+    }
+  }
+  opts = { ...opts, scaffoldVersion }
+  if (opts.cms === 'payload' && opts.packageManager === 'bun') {
+    return { ok: false, error: 'Payload projects currently support npm, pnpm, or Yarn. Choose a supported manager.' }
+  }
+  const pmMeta = packageManagerMeta(opts.packageManager)
+  const pmVersion = await detectPackageManagerVersion(opts.packageManager)
+  if (!pmVersion) {
+    return {
+      ok: false,
+      error: `${pmMeta.name} is not available in PATH. Install it from Apps & Tools, then retry.`,
+    }
+  }
+  log(`Using ${pmMeta.name} v${pmVersion}; scaffold generator ${scaffoldVersion}`, 'sys')
 
   const projectDir = path.join(opts.parentDir, opts.name)
   if (fs.existsSync(projectDir)) {
@@ -589,7 +712,7 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
       // without them the CLI stops at interactive "Enter SQLite connection
       // string" / "Select a coding agent" prompts.
       const code = await runPty(
-        `npx --yes create-payload-app@latest -n "${opts.name}" -t blank --db sqlite --db-connection-string "file:./${opts.name}.db" --no-agent --use-npm -y`,
+        renderCommand(payloadScaffoldCommand(opts.packageManager, opts.name, scaffoldVersion)),
         opts.parentDir,
       )
       {
@@ -603,9 +726,8 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
     } else if (opts.cms === 'strapi') {
       log('Stage 1/4: Scaffolding Strapi CMS project...', 'sys')
       // Strapi is a standalone headless CMS service (default port 1337)
-      const lang = opts.typescript ? '--typescript' : '--javascript'
       const code = await runPty(
-        `npx --yes create-strapi-app@latest "${opts.name}" --quickstart --no-run --skip-cloud --use-npm ${lang}`,
+        renderCommand(strapiScaffoldCommand(opts.packageManager, opts.name, opts.typescript, scaffoldVersion)),
         opts.parentDir,
       )
       {
@@ -624,11 +746,13 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
         '--eslint',
         '--app',
         '--no-src-dir',
-        '--import-alias "@/*"',
-        '--use-npm',
-        '--yes',
-      ].join(' ')
-      const code = await runPty(`npx --yes create-next-app@latest "${opts.name}" ${flags}`, opts.parentDir)
+        '--import-alias',
+        '@/*',
+      ]
+      const code = await runPty(
+        renderCommand(nextScaffoldCommand(opts.packageManager, opts.name, flags, scaffoldVersion)),
+        opts.parentDir,
+      )
       {
         const fail = runFailure(
           code,
@@ -640,9 +764,9 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
     } else if (opts.framework === 'electron') {
       log('Stage 1/4: Scaffolding Electron project...', 'sys')
       const template = opts.typescript ? 'react-ts' : 'react'
-      // npm create passes flags reliably; --skip disables updater/mirror prompts.
+      // --skip disables updater/mirror prompts in the quick-start generator.
       let code = await runPty(
-        `npm create @quick-start/electron@latest "${opts.name}" -- --template ${template} --skip`,
+        renderCommand(electronScaffoldCommand(opts.packageManager, opts.name, template, scaffoldVersion)),
         opts.parentDir,
       )
       {
@@ -654,13 +778,17 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
         if (fail) return fail
       }
       log('Stage 2/4: Installing dependencies...', 'sys')
-      code = await run('npm install', projectDir)
+      const installCmd = renderCommand(installDependenciesCommand(opts.packageManager))
+      code = await run(installCmd, projectDir)
       {
-        const fail = runFailure(code, 'npm install was interrupted.', `npm install exited with code ${code}`)
+        const fail = runFailure(code, `${installCmd} was interrupted.`, `${installCmd} exited with code ${code}`)
         if (fail) return fail
       }
       if (opts.tailwind) {
-        code = await run('npm install tailwindcss @tailwindcss/vite', projectDir)
+        code = await run(
+          renderCommand(addPackagesCommand(opts.packageManager, ['tailwindcss', '@tailwindcss/vite'])),
+          projectDir,
+        )
         {
           const fail = runFailure(code, 'tailwind install was interrupted.', `tailwind install exited with code ${code}`)
           if (fail) return fail
@@ -675,7 +803,10 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
           : opts.framework === 'vite-vue'
             ? opts.typescript ? 'vue-ts' : 'vue'
             : opts.typescript ? 'vanilla-ts' : 'vanilla'
-      let code = await runPty(`npm create vite@latest "${opts.name}" -- --template ${template}`, opts.parentDir)
+      let code = await runPty(
+        renderCommand(viteScaffoldCommand(opts.packageManager, opts.name, template, scaffoldVersion)),
+        opts.parentDir,
+      )
       {
         const fail = runFailure(
           code,
@@ -685,13 +816,17 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
         if (fail) return fail
       }
       log('Stage 2/4: Installing dependencies...', 'sys')
-      code = await run('npm install', projectDir)
+      const installCmd = renderCommand(installDependenciesCommand(opts.packageManager))
+      code = await run(installCmd, projectDir)
       {
-        const fail = runFailure(code, 'npm install was interrupted.', `npm install exited with code ${code}`)
+        const fail = runFailure(code, `${installCmd} was interrupted.`, `${installCmd} exited with code ${code}`)
         if (fail) return fail
       }
       if (opts.tailwind) {
-        code = await run('npm install tailwindcss @tailwindcss/vite', projectDir)
+        code = await run(
+          renderCommand(addPackagesCommand(opts.packageManager, ['tailwindcss', '@tailwindcss/vite'])),
+          projectDir,
+        )
         {
           const fail = runFailure(code, 'tailwind install was interrupted.', `tailwind install exited with code ${code}`)
           if (fail) return fail
@@ -707,6 +842,15 @@ async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
         ok: false,
         error: `The scaffolding tool finished without creating "${opts.name}" at ${projectDir}. It likely failed above — check the terminal logs.`,
       }
+    }
+
+    // Pin the selected manager so future imports and every subsequent DevFlow
+    // command resolve the same tool instead of guessing from a missing lockfile.
+    const packageJsonPath = path.join(projectDir, 'package.json')
+    if (fs.existsSync(packageJsonPath)) {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
+      pkg.packageManager = `${opts.packageManager}@${pmVersion}`
+      fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8')
     }
 
     if (opts.cms === 'decap') {

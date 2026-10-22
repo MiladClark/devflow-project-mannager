@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { PackageManager, Project, BuildIssue } from '../../src/shared/types'
 import { run } from './tools'
+import { installDependenciesCommand, renderCommand, runScriptCommand } from './packageManagerAdapter'
 
 /** Resolve the package manager a project uses, from its lockfile / packageManager field. */
 export function resolvePackageManager(dir: string): PackageManager {
@@ -26,20 +27,11 @@ export function resolvePackageManager(dir: string): PackageManager {
 
 /** The command to run a package.json script with the given manager. */
 export function pmRun(pm: PackageManager, script: string): string {
-  switch (pm) {
-    case 'npm':
-      return `npm run ${script}`
-    case 'pnpm':
-      return `pnpm run ${script}`
-    case 'yarn':
-      return `yarn ${script}`
-    case 'bun':
-      return `bun run ${script}`
-  }
+  return renderCommand(runScriptCommand(pm, script))
 }
 
 export function pmInstall(pm: PackageManager): string {
-  return pm === 'yarn' ? 'yarn install' : `${pm} install`
+  return renderCommand(installDependenciesCommand(pm))
 }
 
 /** Apps & Tools id for installing a package manager, if it isn't bundled with Node. */

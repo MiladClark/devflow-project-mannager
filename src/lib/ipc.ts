@@ -20,6 +20,7 @@ import type {
   ConnectionTestResult,
   ApplyEnvResult,
   ToolStatus,
+  ToolInstallOptions,
   InstallState,
   DbService,
   LicenseState,
@@ -152,7 +153,7 @@ export interface Api {
   applyConnection(conn: DbConnection): Promise<ApplyEnvResult>
   onConnectionsChanged(cb: (connections: DbConnection[]) => void): () => void
   detectTools(): Promise<ToolStatus[]>
-  installTool(toolId: string): Promise<{ ok: boolean; error?: string }>
+  installTool(toolId: string, options?: ToolInstallOptions): Promise<{ ok: boolean; error?: string }>
   uninstallTool(toolId: string): Promise<{ ok: boolean; error?: string }>
   cancelInstallTool(toolId: string): Promise<{ ok: boolean; error?: string }>
   getInstallStates(): Promise<InstallState[]>
@@ -247,6 +248,7 @@ const MOCK_GIT: GitStatus = {
 let MOCK_SETTINGS: AppSettings = {
   reservedPorts: [3000, 3001],
   defaultProjectsDir: 'C:\\dev',
+  preferredPackageManager: 'npm',
   closeToTray: false,
   notifyCrash: true,
   notifyBuild: true,
@@ -407,6 +409,7 @@ function createMockApi(): Api {
     healthGet: async (projectId) => ({
       projectId,
       scannedAt: Date.now() - 3600_000,
+      packageManager: 'npm',
       outdated: [
         { name: 'react', current: '18.3.1', wanted: '18.3.1', latest: '19.0.0' },
         { name: 'vite', current: '6.0.3', wanted: '6.0.7', latest: '6.0.7' },

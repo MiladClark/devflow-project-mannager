@@ -7,7 +7,7 @@ import { api, isElectron } from '../lib/ipc'
 import { THEMES, applyTheme, getThemeChoice, type ThemeMode } from '../lib/theme'
 import { FONTS, applyFont, getFontId } from '../lib/font'
 import { Switch, SwitchField } from '../components/Switch'
-import type { PreferredEditor, PreferredNodeManager, ProxySetupStatus, PortStatusOverview } from '../shared/types'
+import type { PackageManager, PreferredEditor, PreferredNodeManager, ProxySetupStatus, PortStatusOverview } from '../shared/types'
 
 function SettingsSection({
   title,
@@ -133,7 +133,28 @@ function EditorSection() {
   }
 
   return (
-    <SettingsSection title="Editor" description="Choose which code editor opens when you click Open in Editor.">
+    <SettingsSection title="Runtime & editor" description="Choose the defaults DevFlow uses for new projects and editor actions.">
+      <SettingsSubsection title="Default package manager">
+        <div className="flex flex-wrap gap-2">
+          {(['npm', 'pnpm', 'yarn', 'bun'] as PackageManager[]).map((manager) => (
+            <button
+              key={manager}
+              type="button"
+              onClick={() => patch({ preferredPackageManager: manager })}
+              className={`rounded-lg border px-4 py-2 text-sm ${
+                local.preferredPackageManager === manager
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-edge text-slate-400'
+              }`}
+            >
+              {manager === 'yarn' ? 'Yarn' : manager}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500">
+          Used as the initial choice in Create Project. You can override it for every stack.
+        </p>
+      </SettingsSubsection>
       <SettingsSubsection title="Preferred editor">
         <div className="flex flex-wrap gap-2">
           {(

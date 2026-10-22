@@ -1,10 +1,11 @@
 import { ipcMain } from 'electron'
 import { detectTools, installTool, uninstallTool, cancelInstall, getInstallStates } from '../lib/tools'
 import { listDbServices, serviceAction } from '../lib/services'
+import type { ToolInstallOptions } from '../../src/shared/types'
 
 export function registerToolsHandlers() {
   ipcMain.handle('tools:detect', () => detectTools())
-  ipcMain.handle('tools:install', (_e, toolId: string) => installTool(toolId))
+  ipcMain.handle('tools:install', (_e, toolId: string, options?: ToolInstallOptions) => installTool(toolId, options))
   ipcMain.handle('tools:uninstall', (_e, toolId: string) => uninstallTool(toolId))
   ipcMain.handle('tools:cancelInstall', (_e, toolId: string) => cancelInstall(toolId))
   ipcMain.handle('tools:installStates', () => getInstallStates())

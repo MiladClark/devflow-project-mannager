@@ -99,6 +99,15 @@ win:
     - nsis
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
+  # Auto-update contract: a per-user, one-click NSIS installer can replace the
+  # current installation without UAC and is the target supported by
+  # electron-updater. The portable ZIP remains a manual distribution artifact.
+  oneClick: true
+  perMachine: false
+  allowElevation: true
+  differentialPackage: true
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always

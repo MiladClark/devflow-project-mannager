@@ -3,15 +3,19 @@ import type { UpdateCheckResult } from '../../src/shared/types'
 import { DEFAULT_SERVER_URL, getLicenseState } from './licensing'
 import { FREE_LIMITS, mapEntitlements } from '../../src/shared/entitlements-map'
 
-export async function checkForUpdates(serverUrl?: string): Promise<UpdateCheckResult> {
-  const current = app.getVersion()
-  const base = serverUrl || DEFAULT_SERVER_URL
+export function getUpdateChannel(): 'stable' | 'beta' {
   const license = getLicenseState()
   const entitlements =
     license.valid && license.activated
       ? mapEntitlements(license.entitlements, license.plan ?? license.tier ?? 'pro')
       : FREE_LIMITS
-  const channel = entitlements.betaChannel ? 'beta' : 'stable'
+  return entitlements.betaChannel ? 'beta' : 'stable'
+}
+
+export async function checkForUpdates(serverUrl?: string): Promise<UpdateCheckResult> {
+  const current = app.getVersion()
+  const base = serverUrl || DEFAULT_SERVER_URL
+  const channel = getUpdateChannel()
   try {
     const url = new URL('/api/updates/check', base)
     url.searchParams.set('product', 'devflow')

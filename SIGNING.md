@@ -26,7 +26,7 @@ What we *did* wire in the repo: optional signing when **you** later provide a PF
 | `make-release.mjs` / `package-portable.mjs` | After icon embed, calls `scripts/sign-windows.mjs` |
 | No credentials | Warns and continues **unsigned** (fine for you) |
 | `SIGNING_REQUIRED=1` | Fail if unsigned — only use if you later buy a cert |
-| Auto-updater | Requires SHA-256 checksum on updates |
+| Auto-updater | Uses electron-builder's SHA-512 release metadata; Authenticode is additionally enforced when a trusted certificate is configured |
 
 ---
 

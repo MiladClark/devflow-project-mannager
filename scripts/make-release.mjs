@@ -116,7 +116,7 @@ if (version !== currentVersion) {
 const versionTsPath = path.join(root, "src", "version.ts");
 writeFileSync(versionTsPath, `export const APP_VERSION = '${version}'\n`);
 console.log(`  → src/version.ts synced to ${version}`);
-const defaultStaging = path.resolve(root, "..", "devflow-app-updates", "devflow-app-updates", ".staging");
+const defaultStaging = path.join(root, "release-artifacts");
 const outDir = path.resolve(
   arg("--out-dir", process.env.UPDATES_REPO ? path.join(process.env.UPDATES_REPO, ".staging") : defaultStaging)
 );
@@ -192,6 +192,11 @@ step(`Writing release folder: ${folderName}`);
 mkdirSync(outDir, { recursive: true });
 if (existsSync(targetDir)) rmSync(targetDir, { recursive: true, force: true });
 cpSync(staging, targetDir, { recursive: true });
+writeFileSync(
+  path.join(targetDir, "resources", "portable-build"),
+  "Portable DevFlow build: update by replacing this folder.\n",
+  "utf8"
+);
 
 // Optional installer next to the portable folder (Inno Setup output)
 const installerCandidates = [

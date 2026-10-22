@@ -12,7 +12,7 @@ function getArg(name) {
   return i >= 0 && args[i + 1] ? args[i + 1] : ''
 }
 
-const repo = getArg('--repo') || 'MiladClark/devflow-app-updates'
+const repo = getArg('--repo') || 'MiladClark/devflow-project-mannager'
 const tag = getArg('--tag')
 const title = getArg('--title') || tag
 const notes = getArg('--notes') || ''

@@ -24,7 +24,7 @@ export function UpdateRoot() {
   const startDownload = useCallback(async (version?: string, required?: boolean) => {
     setProgress({ phase: 'downloading', percent: 0, message: 'Starting download…', version })
     const res = await api.startUpdate(version, required)
-    if (!res.ok && res.error && res.error !== 'Update cancelled') {
+    if (!res.ok && res.error && res.error !== 'Update cancelled' && res.error !== 'paused') {
       setProgress((p) => ({
         phase: 'error',
         percent: 0,

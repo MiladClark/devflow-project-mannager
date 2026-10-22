@@ -25,7 +25,7 @@ import { createTray, refreshTrayMenu, destroyTray } from './lib/tray'
 import { loadBrandIcon, resolveBrandIconPath } from './lib/icon'
 import { startNotifications, stopNotifications } from './lib/notify'
 import { checkForUpdates } from './lib/updates'
-import { isQuittingForUpdate, isRequiredUpdateActive } from './lib/updater'
+import { isAutomaticUpdateSupported, isQuittingForUpdate, isRequiredUpdateActive } from './lib/updater'
 import { getLicenseState } from './lib/licensing'
 import { store } from './lib/store'
 
@@ -149,7 +149,7 @@ app.whenReady().then(async () => {
   startNotifications(() => win)
   // update check on startup — notifies for any available update, required or not
   setTimeout(async () => {
-    if (!store.getSettings().notifyUpdates) return
+    if (!store.getSettings().notifyUpdates || !isAutomaticUpdateSupported()) return
     const res = await checkForUpdates(getLicenseState().serverUrl)
     if (res.ok && res.updateAvailable && res.latest) {
       notifyUpdateAvailable({
@@ -172,14 +172,18 @@ app.on('window-all-closed', async () => {
   stopStatsPolling()
   stopNotifications()
   destroyTray()
+  // quitAndInstall() owns the quit sequence while updating. Calling app.quit()
+  // again from this event can race the NSIS installer launch.
+  if (isQuittingForUpdate()) return
   await stopAll()
   app.quit()
 })
 
 app.on('before-quit', () => {
   quitting = true
-  if (isQuittingForUpdate()) return
   disposeAllTerminals()
   stopProxy()
+  // installPendingUpdate already awaited stopAll before asking NSIS to run.
+  if (isQuittingForUpdate()) return
   void stopAll()
 })

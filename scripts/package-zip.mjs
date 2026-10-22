@@ -13,7 +13,7 @@ function arg(name, fallback) {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback
 }
 
-const defaultOutDir = path.resolve(root, '..', 'devflow-app-updates', 'devflow-app-updates', '.staging')
+const defaultOutDir = path.join(root, 'release')
 const outDir = path.resolve(
   arg('--out-dir', process.env.UPDATES_REPO ? path.join(process.env.UPDATES_REPO, '.staging') : defaultOutDir),
 )

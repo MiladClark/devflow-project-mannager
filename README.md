@@ -101,9 +101,10 @@ _Add your screenshots here_
 - A crisp, frameless dark UI.
 
 ### 🔄 Effortless updates
-- **Silent auto-update** — DevFlow checks for new versions on launch, downloads in the
-  background, verifies a SHA-256 checksum, and reinstalls **in place** with no wizard
-  and no path prompts.
+- **Installer-based auto-update** — Setup installations use the supported
+  `electron-updater` + NSIS flow. DevFlow downloads the release installer in the
+  background, verifies the SHA-512 metadata generated with that installer, installs
+  it in place, and relaunches automatically.
 
 ---
 
@@ -114,10 +115,11 @@ Grab the latest build from the [**Releases page**](https://github.com/MiladClark
 | Download | Best for |
 | --- | --- |
 | **Setup installer** (`…-setup.exe`) | Normal install — creates Start-menu & desktop shortcuts. |
-| **Portable** (`…-portable.zip`) | No install — just unzip and run `DevFlow Manager.exe` (great for USB / locked-down machines). |
+| **Portable** (`…-portable.zip`) | No install — unzip and run `DevFlow Manager.exe`; replace the folder manually when updating. |
 
-Both are the exact same app with identical features; they differ only in how they land
-on disk. After the first install, you never download again — the app updates itself.
+Both contain the same app and features. The **Setup installation is recommended** and
+supports automatic in-place updates. The portable ZIP intentionally remains a manual,
+folder-based distribution so an updater never mutates an arbitrary removable folder.
 
 > ℹ️ Builds are currently **unsigned**, so Windows SmartScreen may warn on first launch.
 > Choose **More info → Run anyway**.
@@ -153,7 +155,7 @@ Manage your plan at **[devtune.app](https://devtune.app)**.
 | UI | **React 19**, **React Router 7**, **Tailwind CSS 4**, **Zustand 5**, **Recharts 3**, **Lucide** |
 | Terminal | **node-pty** + **@xterm/xterm** |
 | Build | **Vite 8** (Rolldown), **TypeScript 7**, **electron-builder 26** |
-| Updates | Custom OTA updater against GitHub Releases, registered with the DevTune API |
+| Updates | `electron-updater` + per-user NSIS via GitHub Releases; policy from DevTune API |
 
 ---
 
@@ -223,9 +225,10 @@ git tag v0.1.22
 git push origin v0.1.22
 ```
 
-CI then builds the portable zip and the NSIS Setup, uploads both to a GitHub Release,
-and registers them with the DevTune update API — existing users receive the update
-automatically on their next launch.
+CI builds the portable ZIP and the NSIS Setup together with `latest.yml` and its
+differential blockmap, validates that bundle, publishes it as one GitHub Release, and
+then registers release policy with the DevTune API. Setup installations receive the
+update automatically on their next launch.
 
 <br />
 
@@ -311,9 +314,9 @@ Made with ⚡ by **[DevTune](https://devtune.app)**
 - یک رابطِ تیره‌ی frameless و تمیز.
 
 ### 🔄 آپدیتِ بی‌دردسر
-- **آپدیت خودکارِ بی‌صدا** — DevFlow هنگام اجرا نسخه‌ی جدید را چک می‌کند، در پس‌زمینه
-  دانلود می‌کند، checksum را با SHA-256 تأیید می‌کند و **درجا** روی همان پوشه دوباره نصب
-  می‌کند، بدون ویزارد و بدون پرسیدنِ مسیر.
+- **آپدیت استاندارد با نصب‌کننده** — نسخه‌ای که با Setup نصب شده از مسیر رسمی
+  `electron-updater` و NSIS به‌روزرسانی می‌شود؛ نصب‌کننده در پس‌زمینه دانلود، با
+  متادیتای SHA-512 همان release تأیید، درجا نصب و سپس اپ دوباره اجرا می‌شود.
 
 ---
 
@@ -324,10 +327,10 @@ Made with ⚡ by **[DevTune](https://devtune.app)**
 | دانلود | مناسب برای |
 | --- | --- |
 | **نصب‌کننده** (`…-setup.exe`) | نصبِ معمولی — شورت‌کاتِ استارت‌منو و دسکتاپ می‌سازد. |
-| **پرتابل** (`…-portable.zip`) | بدون نصب — فقط unzip کن و `DevFlow Manager.exe` را اجرا کن (عالی برای USB / سیستمِ محدود). |
+| **پرتابل** (`…-portable.zip`) | بدون نصب — unzip کن و اجرا کن؛ برای آپدیت، پوشه را دستی جایگزین کن. |
 
-هر دو دقیقاً یک اپ با امکاناتِ یکسان‌اند؛ فقط در نحوه‌ی قرار گرفتن روی دیسک فرق دارند. بعد
-از نصبِ اول، دیگر لازم نیست دانلود کنی — اپ خودش را آپدیت می‌کند.
+هر دو امکانات یکسان دارند، اما **نصب با Setup پیشنهاد می‌شود** و آپدیت خودکارِ درجا دارد.
+نسخه‌ی پرتابل عمداً دستی آپدیت می‌شود تا updater هیچ پوشه‌ی دلخواه یا فلش را تغییر ندهد.
 
 > ℹ️ بیلدها فعلاً **امضا نشده‌اند**، پس SmartScreenِ ویندوز ممکن است بارِ اول هشدار بدهد.
 > **More info → Run anyway** را بزن.
@@ -363,7 +366,7 @@ Made with ⚡ by **[DevTune](https://devtune.app)**
 | رابط | **React 19**، **React Router 7**، **Tailwind CSS 4**، **Zustand 5**، **Recharts 3**، **Lucide** |
 | ترمینال | **node-pty** + **@xterm/xterm** |
 | بیلد | **Vite 8** (Rolldown)، **TypeScript 7**، **electron-builder 26** |
-| آپدیت | آپدیترِ OTA سفارشی روی GitHub Releases، ثبت‌شده با API دیوتیون |
+| آپدیت | `electron-updater` و NSIS کاربرمحور روی GitHub Releases؛ سیاست از API دیوتیون |
 
 ---
 
@@ -432,9 +435,9 @@ git tag v0.1.22
 git push origin v0.1.22
 ```
 
-سپس CI زیپِ پرتابل و نصب‌کننده‌ی NSIS را می‌سازد، هر دو را در یک GitHub Release آپلود
-می‌کند و با API آپدیتِ دیوتیون ثبت می‌کند — کاربرهای فعلی آپدیت را در اجرای بعدی به‌طور
-خودکار دریافت می‌کنند.
+سپس CI زیپ پرتابل، Setup نوع NSIS، فایل `latest.yml` و blockmap را با هم می‌سازد و
+اعتبارسنجی می‌کند، به‌عنوان یک GitHub Release منتشر می‌کند و بعد سیاست release را در API
+دیوتیون ثبت می‌کند. نصب‌های Setup در اجرای بعدی آپدیت را خودکار دریافت می‌کنند.
 
 <br />
 

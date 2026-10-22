@@ -1,7 +1,7 @@
 {
   "name": "devflow-manager",
   "productName": "DevFlow Manager",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "description": "Windows desktop app to create, run, monitor and configure local dev projects",
   "author": "DevTune",
   "private": true,
@@ -19,10 +19,12 @@
     "release:folder": "node scripts/make-release.mjs",
     "package:zip": "node scripts/package-zip.mjs",
     "package:zip:mac": "node scripts/package-zip-mac.mjs",
+    "verify:update-artifacts": "node scripts/verify-update-artifacts.mjs --dir release",
     "release:publish": "node scripts/publish-release.mjs",
     "sign:windows": "node scripts/sign-windows.mjs"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "node-pty": "^1.1.0"
   },
   "devDependencies": {

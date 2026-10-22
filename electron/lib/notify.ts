@@ -5,6 +5,7 @@ import { onRuntimeChange } from '../ipc/runner'
 import { checkForUpdates } from './updates'
 import { getLicenseState } from './licensing'
 import { notifyUpdateAvailable } from '../ipc/updates'
+import { isAutomaticUpdateSupported } from './updater'
 
 type NotifyKind = 'crash' | 'build' | 'update'
 
@@ -60,6 +61,7 @@ let updateTimer: NodeJS.Timeout | null = null
 let notifiedVersion = ''
 
 async function pollUpdates() {
+  if (!isAutomaticUpdateSupported()) return
   if (!store.getSettings().notifyUpdates) return
   const res = await checkForUpdates(getLicenseState().serverUrl)
   if (res.ok && res.updateAvailable && res.latest && res.latest.version !== notifiedVersion) {

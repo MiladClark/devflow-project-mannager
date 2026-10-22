@@ -51,6 +51,9 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npx electron-builder --win nsis --publish never
 
+      - name: Validate auto-update bundle
+        run: node scripts/verify-update-artifacts.mjs --dir release --version "${{ github.ref_name }}"
+
       - name: Prepare Setup installer manifest
         shell: bash
         run: |
@@ -84,11 +87,13 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
           REPO="${{ github.repository }}"
+          prerelease_args=()
+          if [[ "$TAG" == *-* ]]; then prerelease_args+=(--prerelease); fi
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
             echo "Release $TAG already exists"
           else
             gh release create "$TAG" --repo "$REPO" \
-              --draft --title "DevFlow Manager $TAG" --generate-notes \
+              --draft --title "DevFlow Manager $TAG" --generate-notes "${prerelease_args[@]}" \
               || gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 \
               || { echo "::error::Failed to create or find release $TAG"; exit 1; }
           fi
@@ -99,7 +104,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           shopt -s nullglob
-          files=(release/*.zip release/*.exe)
+          # Setup + latest.yml + blockmap are one atomic auto-update bundle.
+          # The portable ZIP is retained for manual downloads only.
+          files=(
+            release/*.zip
+            release/*.exe
+            release/latest*.yml
+            release/beta*.yml
+            release/alpha*.yml
+            release/*.blockmap
+          )
           if [ ${#files[@]} -eq 0 ]; then
             echo "::error::No build artifacts found in release/"
             exit 1

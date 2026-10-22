@@ -1,7 +1,7 @@
 /**
  * Build portable app dir and copy to devflow/ (same layout as post-install).
  */
-import { cpSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -68,6 +68,11 @@ if (existsSync(out)) {
 }
 
 cpSync(staging, out, { recursive: true });
+writeFileSync(
+  path.join(out, "resources", "portable-build"),
+  "Portable DevFlow build: update by replacing this folder.\n",
+  "utf8",
+);
 
 try {
   rmSync(path.join(root, "release"), { recursive: true, force: true });

@@ -174,7 +174,7 @@ export interface Api {
   pollLicense(): Promise<void>
   checkUpdates(): Promise<UpdateCheckResult>
   fetchPendingUpdate(): Promise<{ ok: boolean; error?: string; pending?: unknown }>
-  getPendingUpdate(): Promise<{ version: string; downloadUrl: string; checksum: string | null } | null>
+  getPendingUpdate(): Promise<{ version: string; required: boolean; releaseNotes?: string | null } | null>
   startUpdate(version?: string, required?: boolean): Promise<{ ok: boolean; error?: string }>
   pauseUpdate(): Promise<{ ok: boolean; error?: string }>
   resumeUpdate(): Promise<{ ok: boolean; error?: string }>
